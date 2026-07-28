@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  bwtsearch:
+    build: .
+    volumes:
+      # Mount local ./data into the container so index files persist.
+      - ./data:/data
+    working_dir: /data
+    # Override the default entrypoint arguments when running interactively:
+    #   docker compose run bwtsearch search moby.idx "whale"
+    stdin_open: true
+    tty: true
+
+  # Convenience service that downloads the Moby Dick test corpus.
+  download:
+    image: alpine:3.19
+    command: >
+      sh -c "apk --no-cache add wget &&
+             mkdir -p /data &&
+             wget -q -O /data/moby_dick.txt
+               https://www.gutenberg.org/cache/epub/2701/pg2701.txt &&
+             echo 'Downloaded moby_dick.txt'"
+    volumes:
+      - ./data:/data
