@@ -47,9 +47,28 @@ type Index struct {
 	occ  [256]*bitvector.BitVector // per-character rank bit-vectors
 }
 
-// Build constructs an FM-index from text.
+// SuffixArrayAlgorithm selects the suffix-array construction algorithm.
+type SuffixArrayAlgorithm int
+
+const (
+	// AlgorithmDoubling uses the prefix-doubling (Manber-Myers) algorithm
+	// with O(n log² n) time. This is the default.
+	AlgorithmDoubling SuffixArrayAlgorithm = iota
+	// AlgorithmSAIS uses the SA-IS (Suffix Array – Induced Sorting) algorithm
+	// by Nong, Zhang & Chan with O(n) time.
+	AlgorithmSAIS
+)
+
+// Build constructs an FM-index from text using the default doubling algorithm.
 // The text must not contain the null byte (0x00); it is reserved as sentinel.
 func Build(text []byte) *Index {
+	return BuildWithAlgorithm(text, AlgorithmDoubling)
+}
+
+// BuildWithAlgorithm constructs an FM-index from text using the specified
+// suffix-array construction algorithm.
+// The text must not contain the null byte (0x00); it is reserved as sentinel.
+func BuildWithAlgorithm(text []byte, algo SuffixArrayAlgorithm) *Index {
 	// --- 1. Append sentinel -------------------------------------------------
 	n := len(text) + 1
 	t := make([]byte, n)
@@ -57,7 +76,13 @@ func Build(text []byte) *Index {
 	t[n-1] = sentinel
 
 	// --- 2. Suffix array ----------------------------------------------------
-	sa := buildSuffixArray(t)
+	var sa []int
+	switch algo {
+	case AlgorithmSAIS:
+		sa = buildSuffixArraySAIS(t)
+	default:
+		sa = buildSuffixArray(t)
+	}
 
 	// --- 3. BWT  (L column = character preceding each sorted suffix) --------
 	bwt := make([]byte, n)
