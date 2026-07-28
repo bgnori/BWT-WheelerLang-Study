@@ -1,0 +1,17 @@
+{
+  "name": "BWT Wheeler Lang Study",
+  "image": "mcr.microsoft.com/devcontainers/go:1-1.21-bookworm",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "go.toolsManagement.checkForUpdates": "off",
+        "go.useLanguageServer": true
+      },
+      "extensions": [
+        "golang.go"
+      ]
+    }
+  },
+  "postCreateCommand": "go version",
+  "remoteUser": "vscode"
+}
