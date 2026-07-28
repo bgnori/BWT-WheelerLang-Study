@@ -206,3 +206,60 @@ func intSliceEqual(a, b []int) bool {
 	}
 	return true
 }
+
+// --- SA-IS tests -----------------------------------------------------------
+
+func TestSAISMatchesDoubling(t *testing.T) {
+	texts := []string{
+		"banana",
+		"mississippi",
+		"abracadabra",
+		"the quick brown fox jumps over the lazy dog",
+		"aaaaabbbbbccccc",
+		"aaaaaaaaaa",
+		"abcdefghij",
+		"",
+	}
+	patterns := []string{"a", "an", "the", "ab", "ccc", "xyz", "aa"}
+
+	for _, textStr := range texts {
+		text := []byte(textStr)
+		idxDoubling := Build(text)
+		idxSAIS := BuildWithAlgorithm(text, AlgorithmSAIS)
+
+		for _, pat := range patterns {
+			p := []byte(pat)
+			gotD := idxDoubling.Count(p)
+			gotS := idxSAIS.Count(p)
+			if gotD != gotS {
+				t.Errorf("text=%q pat=%q: doubling=%d sais=%d", textStr, pat, gotD, gotS)
+			}
+			posD := sortedPositions(idxDoubling.Locate(p, 0))
+			posS := sortedPositions(idxSAIS.Locate(p, 0))
+			if !intSliceEqual(posD, posS) {
+				t.Errorf("text=%q pat=%q: doubling locate=%v sais locate=%v",
+					textStr, pat, posD, posS)
+			}
+		}
+	}
+}
+
+func TestSAISDirectSuffixArray(t *testing.T) {
+	// Validate the raw suffix array built by SA-IS against the doubling SA.
+	inputs := []string{
+		"banana",
+		"mississippi",
+		"abracadabra",
+		"aaaaaa",
+		"abcabc",
+	}
+	for _, input := range inputs {
+		// Append sentinel manually (same as Build does internally).
+		text := append([]byte(input), sentinel)
+		saDoubling := buildSuffixArray(text)
+		saSAIS := buildSuffixArraySAIS(text)
+		if !intSliceEqual(saDoubling, saSAIS) {
+			t.Errorf("input=%q: doubling SA=%v  sais SA=%v", input, saDoubling, saSAIS)
+		}
+	}
+}
