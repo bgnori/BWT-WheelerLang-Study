@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"index/suffixarray"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -192,6 +193,30 @@ func TestContextAround(t *testing.T) {
 	// should contain "world" plus some context
 	if len(ctx) == 0 {
 		t.Error("ContextAround returned empty string")
+	}
+}
+
+func TestWheelerGraphMermaid(t *testing.T) {
+	idx := Build([]byte("banana"))
+	m := idx.WheelerGraphMermaid(0)
+
+	if !strings.Contains(m, "flowchart LR") {
+		t.Fatalf("Mermaid output must start with flowchart header: %q", m)
+	}
+	if !strings.Contains(m, "n0[") {
+		t.Fatal("expected at least one node in Mermaid output")
+	}
+	if !strings.Contains(m, "--\"") {
+		t.Fatal("expected labeled edges in Mermaid output")
+	}
+}
+
+func TestWheelerGraphMermaidTruncation(t *testing.T) {
+	idx := Build([]byte("mississippi"))
+	m := idx.WheelerGraphMermaid(4)
+
+	if !strings.Contains(m, "more nodes omitted") {
+		t.Fatalf("expected omitted nodes marker in truncated output: %q", m)
 	}
 }
 

@@ -76,6 +76,25 @@ bwtsearch info <index-file>
 
 テキスト長・SA サイズ・アルファベットサイズを表示します。
 
+### `graph` — Wheeler グラフを Mermaid で出力
+
+```
+bwtsearch graph [flags] <index-file>
+```
+
+FM-index が内部で表現している Wheeler グラフを Mermaid 形式で出力します。
+
+- `--max-nodes N`: 描画するノード上限（Wheeler 順序の先頭から）。`0` で全ノード。
+- `--markdown`: `true` のとき ```mermaid フェンス付きで出力（既定値 `true`）。
+
+**例：**
+
+```bash
+bwtsearch graph data/moby_dick.idx --max-nodes 12 > docs/wheeler_graph_moby.md
+```
+
+`docs/wheeler_graph_examples.md` には小規模テキストの具体例を用意しています。
+
 ### `browse` — インタラクティブブラウズ
 
 ```

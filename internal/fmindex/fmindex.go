@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/bgnori/bwt-wheelerlang-study/internal/bitvector"
 )
@@ -243,6 +244,75 @@ func (idx *Index) AlphabetSize() int {
 		}
 	}
 	return count
+}
+
+// WheelerGraphMermaid returns a Mermaid flowchart representation of the
+// Wheeler graph encoded by this FM-index.
+//
+// maxNodes limits the number of nodes emitted in Wheeler order; values <= 0
+// include all nodes.
+func (idx *Index) WheelerGraphMermaid(maxNodes int) string {
+	n := idx.SALen()
+	if maxNodes <= 0 || maxNodes > n {
+		maxNodes = n
+	}
+
+	var b strings.Builder
+	b.WriteString("flowchart LR\n")
+	b.WriteString("  %% Node order is the Wheeler order (SA rank).\n")
+
+	for i := 0; i < maxNodes; i++ {
+		suf := idx.suffixPreview(i, 12)
+		fmt.Fprintf(&b, "  n%d[\"%d: SA=%d %s\"]\n", i, i, idx.SAAt(i), quoteForMermaid(suf))
+	}
+
+	hiddenEdges := 0
+	for i := 0; i < maxNodes; i++ {
+		label := idx.bwt[i]
+		to := idx.c[label] + idx.OccCount(label, i)
+		if to >= maxNodes {
+			hiddenEdges++
+			continue
+		}
+		fmt.Fprintf(&b, "  n%d --\"%s\"--> n%d\n", i, edgeLabel(label), to)
+	}
+
+	if maxNodes < n {
+		hiddenNodes := n - maxNodes
+		fmt.Fprintf(&b, "  hidden[(\"... %d more nodes omitted\")]\n", hiddenNodes)
+		if hiddenEdges > 0 {
+			fmt.Fprintf(&b, "  note[\"%d edges to omitted nodes\"]\n", hiddenEdges)
+			b.WriteString("  note -.-> hidden\n")
+		}
+	}
+
+	return b.String()
+}
+
+func (idx *Index) suffixPreview(saPos, maxLen int) string {
+	textPos := idx.SAAt(saPos)
+	if textPos >= len(idx.text) {
+		return "$"
+	}
+	end := textPos + maxLen
+	if end > len(idx.text) {
+		end = len(idx.text)
+	}
+	return string(idx.text[textPos:end]) + "$"
+}
+
+func edgeLabel(b byte) string {
+	if b == sentinel {
+		return "$"
+	}
+	if b >= 32 && b <= 126 && b != '"' {
+		return string([]byte{b})
+	}
+	return fmt.Sprintf("0x%02X", b)
+}
+
+func quoteForMermaid(s string) string {
+	return strings.ReplaceAll(s, "\"", "\\\\\"")
 }
 
 // --- Suffix array construction ---------------------------------------------
