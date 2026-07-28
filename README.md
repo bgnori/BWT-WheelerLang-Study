@@ -16,6 +16,13 @@
 
 ## 環境構築
 
+### 開発環境と実行環境の使い分け
+
+- **Dev Container (`.devcontainer/devcontainer.json`)**: VS Code での実装・テスト・デバッグ用の開発環境。
+- **Docker (`Dockerfile`, `docker-compose.yml`)**: CLI の実行・配布確認用のコンテナ環境。
+
+役割を分けることで、開発効率（Dev Container）と実行再現性（Docker）の両方を維持します。
+
 ### Docker を使う場合（推奨）
 
 ```bash
@@ -167,6 +174,14 @@ make download-testdata
 ```
 
 > **注意：** テキストデータおよびインデックスファイル（`data/*.txt`, `data/*.idx`）は `.gitignore` に登録されており、リポジトリにはコミットしないでください。
+
+### Git LFS について
+
+このリポジトリは **現時点では Git LFS を必須としていません**。大容量になりやすいデータは `data/` 配下に置き、`.gitignore` で管理します。
+
+- `git: 'lfs' is not a git command` が表示される場合: 現在の開発コンテナに `git-lfs` が入っていない状態です。
+- 通常開発（コード編集・テスト・比較実験）では、そのまま作業を継続できます。
+- もし将来、大容量アセットを Git 管理下に置く必要が出た場合は、`git-lfs` を導入してから対象拡張子を明示的に追跡してください。
 
 ---
 

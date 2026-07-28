@@ -8,8 +8,8 @@
 *.so
 *.dylib
 
-# Compiled binary
-bwtsearch
+# Compiled binary at repo root only
+/bwtsearch
 
 # Test binary, built with `go test -c`
 *.test
