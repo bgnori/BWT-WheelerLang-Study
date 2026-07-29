@@ -65,7 +65,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  graph [flags] <index-file>")
 	fmt.Fprintln(os.Stderr, "  browse <index-file> [--show N] [--context N]")
 	fmt.Fprintln(os.Stderr, "  search [flags] <index-file> <pattern>")
-	fmt.Fprintln(os.Stderr, "  web [--index FILE] [--addr ADDR] [--limit N] [--context N]")
+	fmt.Fprintln(os.Stderr, "  web [--index FILE] [--addr ADDR] [--limit N] [--context N] [--min-chars N]")
 	fmt.Fprintln(os.Stderr, "  compare [flags] <input-file> <pattern>")
 }
 

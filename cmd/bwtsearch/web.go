@@ -22,8 +22,12 @@ func runWeb(args []string) error {
 	indexPath := fs.String("index", "data/moby_dick.idx", "path to FM-index file")
 	defaultLimit := fs.Int("limit", 20, "default maximum number of results")
 	defaultContext := fs.Int("context", 80, "default context size")
+	minChars := fs.Int("min-chars", 4, "minimum query length to trigger interactive search")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *minChars < 1 {
+		*minChars = 1
 	}
 
 	idx, err := loadIndex(*indexPath)
@@ -32,10 +36,11 @@ func runWeb(args []string) error {
 	}
 
 	app := webApp{
-		idx:            idx,
-		defaultLimit:   *defaultLimit,
-		defaultContext: *defaultContext,
-		indexPath:      *indexPath,
+		idx:                 idx,
+		defaultLimit:        *defaultLimit,
+		defaultContext:      *defaultContext,
+		minInteractiveChars: *minChars,
+		indexPath:           *indexPath,
 	}
 
 	mux := http.NewServeMux()
@@ -50,10 +55,11 @@ func runWeb(args []string) error {
 }
 
 type webApp struct {
-	idx            *fmindex.Index
-	defaultLimit   int
-	defaultContext int
-	indexPath      string
+	idx                 *fmindex.Index
+	defaultLimit        int
+	defaultContext      int
+	minInteractiveChars int
+	indexPath           string
 }
 
 type apiError struct {
@@ -61,12 +67,13 @@ type apiError struct {
 }
 
 type infoResponse struct {
-	IndexPath    string `json:"indexPath"`
-	TextLength   int    `json:"textLength"`
-	SuffixLength int    `json:"suffixLength"`
-	AlphabetSize int    `json:"alphabetSize"`
-	DefaultLimit int    `json:"defaultLimit"`
-	ContextSize  int    `json:"contextSize"`
+	IndexPath           string `json:"indexPath"`
+	TextLength          int    `json:"textLength"`
+	SuffixLength        int    `json:"suffixLength"`
+	AlphabetSize        int    `json:"alphabetSize"`
+	DefaultLimit        int    `json:"defaultLimit"`
+	ContextSize         int    `json:"contextSize"`
+	MinInteractiveChars int    `json:"minInteractiveChars"`
 }
 
 type matchResponse struct {
@@ -98,12 +105,13 @@ func (a webApp) handleHome(w http.ResponseWriter, r *http.Request) {
 
 func (a webApp) handleInfo(w http.ResponseWriter, _ *http.Request) {
 	resp := infoResponse{
-		IndexPath:    a.indexPath,
-		TextLength:   a.idx.TextLen(),
-		SuffixLength: a.idx.SALen(),
-		AlphabetSize: a.idx.AlphabetSize(),
-		DefaultLimit: a.defaultLimit,
-		ContextSize:  a.defaultContext,
+		IndexPath:           a.indexPath,
+		TextLength:          a.idx.TextLen(),
+		SuffixLength:        a.idx.SALen(),
+		AlphabetSize:        a.idx.AlphabetSize(),
+		DefaultLimit:        a.defaultLimit,
+		ContextSize:         a.defaultContext,
+		MinInteractiveChars: a.minInteractiveChars,
 	}
 	a.writeJSON(w, http.StatusOK, resp)
 }
@@ -556,9 +564,9 @@ const webHTML = `<!doctype html>
     }
 
     form {
-      display: grid;
-      gap: 10px;
-      grid-template-columns: 1fr 120px 120px 130px;
+	display: grid;
+	gap: 10px;
+	grid-template-columns: 1fr 120px 120px 120px 130px;
       align-items: end;
     }
 
@@ -718,6 +726,10 @@ const webHTML = `<!doctype html>
           <label for="context">Context</label>
           <input id="context" name="context" type="number" min="1" value="80">
         </div>
+				<div>
+					<label for="minChars">Auto From</label>
+					<input id="minChars" name="minChars" type="number" min="1" value="4">
+				</div>
         <button type="submit">Search</button>
       </form>
       <div id="status" class="status"></div>
@@ -734,6 +746,17 @@ const webHTML = `<!doctype html>
     const resultHead = document.getElementById("resultHead");
     const results = document.getElementById("results");
     const empty = document.getElementById("empty");
+		const queryInput = document.getElementById("query");
+		const limitInput = document.getElementById("limit");
+		const contextInput = document.getElementById("context");
+		const minCharsInput = document.getElementById("minChars");
+
+		const state = {
+			minInteractiveChars: 4,
+			debounceMs: 220,
+			requestSeq: 0,
+		};
+		let debounceTimer = 0;
 
     function esc(s) {
       return s
@@ -763,9 +786,75 @@ const webHTML = `<!doctype html>
         '</div>';
       }).join("");
 
-      document.getElementById("limit").value = String(info.defaultLimit);
-      document.getElementById("context").value = String(info.contextSize);
+			limitInput.value = String(info.defaultLimit);
+			contextInput.value = String(info.contextSize);
+			state.minInteractiveChars = Math.max(1, Number(info.minInteractiveChars || 4));
+			minCharsInput.value = String(state.minInteractiveChars);
+
+			setStatus("" + state.minInteractiveChars + "文字以上で自動検索します。");
     }
+
+		function clearResults(message) {
+			resultHead.textContent = "";
+			results.innerHTML = "";
+			empty.style.display = "block";
+			empty.textContent = message;
+		}
+
+		function getMinChars() {
+			const n = Number(minCharsInput.value);
+			if (!Number.isFinite(n) || n < 1) {
+				return state.minInteractiveChars;
+			}
+			return Math.floor(n);
+		}
+
+		async function executeSearch(manual) {
+			const query = queryInput.value.trim();
+			const limit = limitInput.value;
+			const context = contextInput.value;
+			const minChars = getMinChars();
+			state.minInteractiveChars = minChars;
+
+			if (!query) {
+				clearResults("検索語を入力して実行してください。");
+				setStatus("", false);
+				return;
+			}
+			if (!manual && query.length < minChars) {
+				clearResults(minChars + "文字以上で自動検索を開始します。現在: " + query.length + "文字");
+				setStatus("入力待ち", false);
+				return;
+			}
+
+			const reqID = ++state.requestSeq;
+			setStatus("Searching...");
+			const params = new URLSearchParams({ q: query, limit, context });
+			const res = await fetch('/api/search?' + params.toString());
+			const body = await res.json();
+
+			if (reqID !== state.requestSeq) {
+				return;
+			}
+
+			if (!res.ok) {
+				setStatus(body.error || "Search failed", true);
+				clearResults("エラー内容を確認してクエリを修正してください。");
+				return;
+			}
+
+			setStatus("");
+			renderResults(body);
+		}
+
+		function queueInteractiveSearch() {
+			window.clearTimeout(debounceTimer);
+			debounceTimer = window.setTimeout(() => {
+				executeSearch(false).catch((err) => {
+					setStatus('検索エラー: ' + err.message, true);
+				});
+			}, state.debounceMs);
+		}
 
     function renderResults(payload) {
       resultHead.textContent = 'pattern="' + payload.pattern + '" / ' + payload.totalCount + ' hit(s)' +
@@ -796,34 +885,35 @@ const webHTML = `<!doctype html>
     }
 
     form.addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      setStatus("Searching...");
-      resultHead.textContent = "";
-      results.innerHTML = "";
-      empty.style.display = "none";
-
-      const query = document.getElementById("query").value.trim();
-      const limit = document.getElementById("limit").value;
-      const context = document.getElementById("context").value;
-      if (!query) {
-        setStatus("Pattern を入力してください。", true);
-        return;
-      }
-
-			const params = new URLSearchParams({ q: query, limit, context });
-			const res = await fetch('/api/search?' + params.toString());
-      const body = await res.json();
-
-      if (!res.ok) {
-        setStatus(body.error || "Search failed", true);
-        empty.style.display = "block";
-        empty.textContent = "エラー内容を確認してクエリを修正してください。";
-        return;
-      }
-
-      setStatus("");
-      renderResults(body);
+			ev.preventDefault();
+			executeSearch(true).catch((err) => {
+				setStatus('検索エラー: ' + err.message, true);
+			});
     });
+
+		queryInput.addEventListener("input", queueInteractiveSearch);
+
+		limitInput.addEventListener("input", () => {
+			if (queryInput.value.trim().length >= getMinChars()) {
+				queueInteractiveSearch()
+			}
+		});
+
+		contextInput.addEventListener("input", () => {
+			if (queryInput.value.trim().length >= getMinChars()) {
+				queueInteractiveSearch()
+			}
+		});
+
+		minCharsInput.addEventListener("input", () => {
+			const minChars = getMinChars();
+			state.minInteractiveChars = minChars;
+			if (queryInput.value.trim().length >= minChars) {
+				queueInteractiveSearch()
+			} else {
+				clearResults(minChars + "文字以上で自動検索を開始します。現在: " + queryInput.value.trim().length + "文字");
+			}
+		});
 
     loadInfo().catch((err) => {
       setStatus('初期化エラー: ' + err.message, true);

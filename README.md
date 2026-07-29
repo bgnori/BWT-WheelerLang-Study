@@ -164,7 +164,7 @@ bwtsearch compare <input-file> <pattern> [--limit N]
 ### `web` — 検索を試せる簡易 Web アプリ
 
 ```
-bwtsearch web [--index FILE] [--addr ADDR] [--limit N] [--context N]
+bwtsearch web [--index FILE] [--addr ADDR] [--limit N] [--context N] [--min-chars N]
 ```
 
 インデックスを読み込んでローカル HTTP サーバーを起動し、ブラウザ上で星なし正規表現検索を試せます。
@@ -173,6 +173,7 @@ bwtsearch web [--index FILE] [--addr ADDR] [--limit N] [--context N]
 - `--addr ADDR`: 待ち受けアドレス（既定値 `:8080`）
 - `--limit N`: 初期の最大表示件数（既定値 `20`）
 - `--context N`: 初期の前後コンテキスト文字数（既定値 `80`）
+- `--min-chars N`: 入力中の自動検索を開始する最小文字数（既定値 `4`）
 
 **例：**
 
