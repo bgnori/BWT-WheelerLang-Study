@@ -37,6 +37,8 @@ func main() {
 		err = runBrowse(os.Args[2:])
 	case "search":
 		err = runSearch(os.Args[2:])
+	case "web":
+		err = runWeb(os.Args[2:])
 	case "compare":
 		err = runCompare(os.Args[2:])
 	case "help", "-h", "--help":
@@ -63,6 +65,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  graph [flags] <index-file>")
 	fmt.Fprintln(os.Stderr, "  browse <index-file> [--show N] [--context N]")
 	fmt.Fprintln(os.Stderr, "  search [flags] <index-file> <pattern>")
+	fmt.Fprintln(os.Stderr, "  web [--index FILE] [--addr ADDR] [--limit N] [--context N]")
 	fmt.Fprintln(os.Stderr, "  compare [flags] <input-file> <pattern>")
 }
 

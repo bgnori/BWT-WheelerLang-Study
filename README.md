@@ -161,6 +161,26 @@ bwtsearch compare <input-file> <pattern> [--limit N]
 
 同一テキストに対して FM-index と Go 標準の `index/suffixarray` を実行し、件数と処理時間を比較します。
 
+### `web` — 検索を試せる簡易 Web アプリ
+
+```
+bwtsearch web [--index FILE] [--addr ADDR] [--limit N] [--context N]
+```
+
+インデックスを読み込んでローカル HTTP サーバーを起動し、ブラウザ上で星なし正規表現検索を試せます。
+
+- `--index FILE`: 読み込むインデックス（既定値 `data/moby_dick.idx`）
+- `--addr ADDR`: 待ち受けアドレス（既定値 `:8080`）
+- `--limit N`: 初期の最大表示件数（既定値 `20`）
+- `--context N`: 初期の前後コンテキスト文字数（既定値 `80`）
+
+**例：**
+
+```bash
+bwtsearch web --index data/moby_dick.idx --addr :8080
+# ブラウザで http://localhost:8080 を開く
+```
+
 ---
 
 ## テストデータ
