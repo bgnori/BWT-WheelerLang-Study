@@ -11,8 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bgnori/bwt-wheelerlang-study/internal/fmindex"
-	"github.com/bgnori/bwt-wheelerlang-study/internal/starfree"
+	bwtsearch "github.com/bgnori/bwt-wheelerlang-study"
 )
 
 func runWeb(args []string) error {
@@ -55,7 +54,7 @@ func runWeb(args []string) error {
 }
 
 type webApp struct {
-	idx                 *fmindex.Index
+	idx                 *bwtsearch.Index
 	defaultLimit        int
 	defaultContext      int
 	minInteractiveChars int
@@ -126,7 +125,7 @@ func (a webApp) handleSearch(w http.ResponseWriter, r *http.Request) {
 	limit := parsePositiveInt(r.URL.Query().Get("limit"), a.defaultLimit)
 	contextSize := parsePositiveInt(r.URL.Query().Get("context"), a.defaultContext)
 
-	res, err := starfree.Search(a.idx, q, limit)
+	res, err := bwtsearch.Search(a.idx, q, limit)
 	if err != nil {
 		a.writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
@@ -189,7 +188,7 @@ type traceState struct {
 	choices []string
 }
 
-func fullTextBytes(idx *fmindex.Index) []byte {
+func fullTextBytes(idx *bwtsearch.Index) []byte {
 	// ContextAround can return the full text when the requested range spans it all.
 	return []byte(idx.ContextAround(0, idx.TextLen(), 0))
 }

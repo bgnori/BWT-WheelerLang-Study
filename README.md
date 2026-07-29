@@ -12,6 +12,23 @@
 - **インデックスの永続化**：インデックスをバイナリファイルに保存・読み込みする機能。
 - **標準ライブラリとの比較**：Go の `index/suffixarray` と件数・速度を比較する `compare` コマンド。
 
+## ライブラリとして使う
+
+外部プロジェクトからは、トップレベルの公開パッケージを利用できます。
+
+```go
+import bwtsearch "github.com/bgnori/bwt-wheelerlang-study"
+```
+
+主なAPI：
+
+- `bwtsearch.Build`, `bwtsearch.BuildWithAlgorithm`
+- `bwtsearch.Load`, `bwtsearch.ReadFrom`
+- `(*bwtsearch.Index).Save`, `(*bwtsearch.Index).Count`, `(*bwtsearch.Index).Locate`
+- `bwtsearch.Check`, `bwtsearch.Search`（星なし正規表現検索）
+
+詳細は `docs/library_api.md` を参照してください。
+
 ---
 
 ## 環境構築

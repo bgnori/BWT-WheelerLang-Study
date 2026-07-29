@@ -14,8 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/bgnori/bwt-wheelerlang-study/internal/fmindex"
-	"github.com/bgnori/bwt-wheelerlang-study/internal/starfree"
+	bwtsearch "github.com/bgnori/bwt-wheelerlang-study"
 	"golang.org/x/term"
 )
 
@@ -86,7 +85,7 @@ func runBuild(args []string) error {
 		return fmt.Errorf("read input: %w", err)
 	}
 
-	idx := fmindex.Build(text)
+	idx := bwtsearch.Build(text)
 	out, err := os.Create(indexPath)
 	if err != nil {
 		return fmt.Errorf("create index: %w", err)
@@ -174,7 +173,7 @@ func runBrowse(args []string) error {
 	return runBrowseLineMode(idx, *show, *context, os.Stdin, os.Stdout)
 }
 
-func runBrowseLineMode(idx *fmindex.Index, show int, context int, in io.Reader, out io.Writer) error {
+func runBrowseLineMode(idx *bwtsearch.Index, show int, context int, in io.Reader, out io.Writer) error {
 	reader := bufio.NewScanner(in)
 	for {
 		fmt.Fprint(out, "> ")
@@ -193,7 +192,7 @@ func runBrowseLineMode(idx *fmindex.Index, show int, context int, in io.Reader, 
 	}
 }
 
-func runBrowseInteractive(idx *fmindex.Index, show int, context int, in *os.File, out io.Writer) error {
+func runBrowseInteractive(idx *bwtsearch.Index, show int, context int, in *os.File, out io.Writer) error {
 	m := newBrowseModel(idx, show, context)
 	p := tea.NewProgram(m, tea.WithInput(in), tea.WithOutput(out))
 	if _, err := p.Run(); err != nil {
@@ -202,8 +201,8 @@ func runBrowseInteractive(idx *fmindex.Index, show int, context int, in *os.File
 	return nil
 }
 
-func printBrowseMatches(out io.Writer, idx *fmindex.Index, pattern string, show int, context int) error {
-	res, err := starfree.Search(idx, pattern, show)
+func printBrowseMatches(out io.Writer, idx *bwtsearch.Index, pattern string, show int, context int) error {
+	res, err := bwtsearch.Search(idx, pattern, show)
 	if err != nil {
 		_, writeErr := fmt.Fprintln(out, err)
 		if writeErr != nil {
@@ -238,7 +237,7 @@ func normalizeSnippet(s string) string {
 }
 
 type browseModel struct {
-	idx       *fmindex.Index
+	idx       *bwtsearch.Index
 	show      int
 	context   int
 	input     textinput.Model
@@ -247,7 +246,7 @@ type browseModel struct {
 	errText   string
 }
 
-func newBrowseModel(idx *fmindex.Index, show int, context int) browseModel {
+func newBrowseModel(idx *bwtsearch.Index, show int, context int) browseModel {
 	ti := textinput.New()
 	ti.Placeholder = "Type to search..."
 	ti.Prompt = "> "
@@ -295,7 +294,7 @@ func (m *browseModel) refreshResults() {
 		return
 	}
 
-	res, err := starfree.Search(m.idx, pattern, m.show)
+	res, err := bwtsearch.Search(m.idx, pattern, m.show)
 	if err != nil {
 		m.errText = err.Error()
 		return
@@ -361,7 +360,7 @@ func runSearch(args []string) error {
 	}
 	pattern := fs.Arg(1)
 
-	res, err := starfree.Search(idx, pattern, *limit)
+	res, err := bwtsearch.Search(idx, pattern, *limit)
 	if err != nil {
 		return err
 	}
@@ -401,7 +400,7 @@ func runCompare(args []string) error {
 	pattern := []byte(fs.Arg(1))
 
 	start := time.Now()
-	idx := fmindex.Build(text)
+	idx := bwtsearch.Build(text)
 	fmCount := idx.Count(pattern)
 	fmElapsed := time.Since(start)
 
@@ -415,16 +414,6 @@ func runCompare(args []string) error {
 	return nil
 }
 
-func loadIndex(path string) (*fmindex.Index, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open index: %w", err)
-	}
-	defer file.Close()
-
-	idx, err := fmindex.ReadFrom(file)
-	if err != nil {
-		return nil, err
-	}
-	return idx, nil
+func loadIndex(path string) (*bwtsearch.Index, error) {
+	return bwtsearch.Load(path)
 }
