@@ -232,6 +232,58 @@ func intSliceEqual(a, b []int) bool {
 	return true
 }
 
+// --- Japanese text tests ---------------------------------------------------
+
+// TestJapaneseText verifies that the FM-index correctly handles UTF-8 encoded
+// Japanese text.  "上杉謙信" (Uesugi Kenshin) appears twice in the sample
+// sentence and the index must find both occurrences at the expected byte
+// positions.
+func TestJapaneseText(t *testing.T) {
+	// 上杉謙信 appears at byte offsets 15 and 63 in this text (each kanji = 3 bytes).
+	text := []byte("武田信玄と上杉謙信は戦国時代の名将である。上杉謙信は越後の虎と呼ばれた。")
+	idx := Build(text)
+
+	pattern := []byte("上杉謙信")
+
+	// Count
+	if got := idx.Count(pattern); got != 2 {
+		t.Errorf("Count(上杉謙信) = %d, want 2", got)
+	}
+
+	// Locate
+	positions := sortedPositions(idx.Locate(pattern, 0))
+	wantPositions := []int{15, 63}
+	if !intSliceEqual(positions, wantPositions) {
+		t.Errorf("Locate(上杉謙信) = %v, want %v", positions, wantPositions)
+	}
+
+	// Absent sub-pattern
+	if got := idx.Count([]byte("徳川家康")); got != 0 {
+		t.Errorf("Count(徳川家康) = %d, want 0 (not in text)", got)
+	}
+}
+
+// TestJapaneseTextSAIS confirms the SA-IS algorithm produces the same results
+// for Japanese input as the default doubling algorithm.
+func TestJapaneseTextSAIS(t *testing.T) {
+	text := []byte("武田信玄と上杉謙信は戦国時代の名将である。上杉謙信は越後の虎と呼ばれた。")
+	pattern := []byte("上杉謙信")
+
+	idxDoubling := Build(text)
+	idxSAIS := BuildWithAlgorithm(text, AlgorithmSAIS)
+
+	if idxDoubling.Count(pattern) != idxSAIS.Count(pattern) {
+		t.Errorf("Count mismatch between doubling (%d) and SAIS (%d)",
+			idxDoubling.Count(pattern), idxSAIS.Count(pattern))
+	}
+
+	posD := sortedPositions(idxDoubling.Locate(pattern, 0))
+	posS := sortedPositions(idxSAIS.Locate(pattern, 0))
+	if !intSliceEqual(posD, posS) {
+		t.Errorf("Locate mismatch: doubling=%v sais=%v", posD, posS)
+	}
+}
+
 // --- SA-IS tests -----------------------------------------------------------
 
 func TestSAISMatchesDoubling(t *testing.T) {

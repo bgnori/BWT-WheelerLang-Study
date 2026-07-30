@@ -211,6 +211,38 @@ func TestSearchNotFound(t *testing.T) {
 	}
 }
 
+// TestSearchJapanese verifies that star-free literal search works correctly on
+// UTF-8 Japanese text.  "上杉謙信" (Uesugi Kenshin) appears twice in the
+// sample sentence; the search result must report TotalCount == 2 and return
+// both byte-offset positions (15 and 63).
+func TestSearchJapanese(t *testing.T) {
+	// 上杉謙信 appears at byte offsets 15 and 63 (each kanji = 3 bytes).
+	idx := buildIdx("武田信玄と上杉謙信は戦国時代の名将である。上杉謙信は越後の虎と呼ばれた。")
+
+	res, err := Search(idx, "上杉謙信", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.TotalCount != 2 {
+		t.Errorf("TotalCount = %d, want 2", res.TotalCount)
+	}
+
+	positions := sortedInts(res.Positions(idx))
+	want := []int{15, 63}
+	if !intSliceEq(positions, want) {
+		t.Errorf("positions = %v, want %v", positions, want)
+	}
+
+	// A name absent from the text must return zero matches.
+	res, err = Search(idx, "徳川家康", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.TotalCount != 0 {
+		t.Errorf("TotalCount for absent pattern = %d, want 0", res.TotalCount)
+	}
+}
+
 func TestSearchNonASCIILiteral(t *testing.T) {
 	// Verify that UTF-8 (non-ASCII) literal search works correctly.
 	text := "上杉謙信は戦国時代の武将である。上杉謙信の生涯は波乱万丈であった。"

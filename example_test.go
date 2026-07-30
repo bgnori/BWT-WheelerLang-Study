@@ -93,3 +93,18 @@ func ExampleLoad() {
 	// Output:
 	// 6
 }
+
+// ExampleBuild_japanese demonstrates building and searching an FM-index over
+// UTF-8 Japanese text.  "上杉謙信" (Uesugi Kenshin) is a famous warlord of
+// the Sengoku period; the index finds both occurrences in the sentence.
+func ExampleBuild_japanese() {
+	// 上杉謙信 appears twice: once at byte 15, once at byte 63.
+	text := "武田信玄と上杉謙信は戦国時代の名将である。上杉謙信は越後の虎と呼ばれた。"
+	idx := Build([]byte(text))
+
+	fmt.Println(idx.Count([]byte("上杉謙信")))
+	fmt.Println(idx.Count([]byte("徳川家康")))
+	// Output:
+	// 2
+	// 0
+}
