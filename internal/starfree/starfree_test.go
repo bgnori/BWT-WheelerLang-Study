@@ -243,6 +243,47 @@ func TestSearchJapanese(t *testing.T) {
 	}
 }
 
+func TestSearchNonASCIILiteral(t *testing.T) {
+	// Verify that UTF-8 (non-ASCII) literal search works correctly.
+	text := "上杉謙信は戦国時代の武将である。上杉謙信の生涯は波乱万丈であった。"
+	idx := buildIdx(text)
+
+	res, err := Search(idx, "上杉謙信", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.TotalCount != 2 {
+		t.Errorf("TotalCount = %d, want 2 for '上杉謙信'", res.TotalCount)
+	}
+}
+
+func TestSearchNonASCIINotFound(t *testing.T) {
+	text := "上杉謙信は戦国時代の武将である。"
+	idx := buildIdx(text)
+
+	res, err := Search(idx, "武田信玄", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.TotalCount != 0 {
+		t.Errorf("TotalCount = %d, want 0 for absent Japanese pattern", res.TotalCount)
+	}
+}
+
+func TestSearchMixedASCIIAndNonASCII(t *testing.T) {
+	// Pattern that mixes ASCII and non-ASCII characters.
+	text := "author:上杉謙信 born:1530"
+	idx := buildIdx(text)
+
+	res, err := Search(idx, "author:上杉謙信", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.TotalCount != 1 {
+		t.Errorf("TotalCount = %d, want 1 for mixed ASCII/non-ASCII pattern", res.TotalCount)
+	}
+}
+
 func intSliceEq(a, b []int) bool {
 	if len(a) != len(b) {
 		return false

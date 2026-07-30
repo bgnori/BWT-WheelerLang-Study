@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"regexp/syntax"
 	"sort"
+	"unicode/utf8"
 
 	"github.com/bgnori/bwt-wheelerlang-study/internal/fmindex"
 )
@@ -226,47 +227,41 @@ func evalRegex(idx *fmindex.Index, re *syntax.Regexp, lo, hi int) []Interval {
 
 // evalLiteral processes a multi-character literal (re.Rune) right-to-left.
 // foldCase enables case-insensitive matching for ASCII letters.
-// Non-ASCII runes are encoded as their UTF-8 byte sequences and each byte is
-// fed into the backward search in right-to-left order.
+// Non-ASCII runes are encoded as UTF-8 bytes and searched at the byte level.
 func evalLiteral(idx *fmindex.Index, runes []rune, lo, hi int, foldCase bool) []Interval {
-	intervals := []Interval{{lo, hi}}
-	for i := len(runes) - 1; i >= 0 && len(intervals) > 0; i-- {
-		r := runes[i]
+	// Encode all runes to UTF-8 bytes for byte-level backward search.
+	var encoded []byte
+	for _, r := range runes {
+		var buf [utf8.UTFMax]byte
+		n := utf8.EncodeRune(buf[:], r)
+		encoded = append(encoded, buf[:n]...)
+	}
 
-		// Build the set of byte sequences to try for this rune.
-		// ASCII: optionally case-fold to a second sequence.
-		// Non-ASCII: one UTF-8 byte sequence; case-folding is not applied.
-		var seqs [][]byte
-		if r <= 127 {
-			b := byte(r)
-			if foldCase {
-				switch {
-				case b >= 'a' && b <= 'z':
-					seqs = [][]byte{{b}, {b - 32}}
-				case b >= 'A' && b <= 'Z':
-					seqs = [][]byte{{b}, {b + 32}}
-				default:
-					seqs = [][]byte{{b}}
-				}
-			} else {
-				seqs = [][]byte{{b}}
+	intervals := []Interval{{lo, hi}}
+	for i := len(encoded) - 1; i >= 0 && len(intervals) > 0; i-- {
+		b := encoded[i]
+		var chars []byte
+		// Apply ASCII case folding only; continuation bytes (0x80–0xFF) of
+		// multi-byte UTF-8 sequences must be matched exactly.
+		if foldCase && b <= 127 {
+			switch {
+			case b >= 'a' && b <= 'z':
+				chars = []byte{b, b - 32}
+			case b >= 'A' && b <= 'Z':
+				chars = []byte{b, b + 32}
+			default:
+				chars = []byte{b}
 			}
 		} else {
-			// Encode the rune as UTF-8 and treat each byte individually.
-			seqs = [][]byte{[]byte(string(r))}
+			chars = []byte{b}
 		}
 
 		var next []Interval
 		for _, iv := range intervals {
-			for _, bs := range seqs {
-				// Apply backward search steps right-to-left over the bytes of
-				// this rune (or character).
-				curLo, curHi := iv.Lo, iv.Hi
-				for j := len(bs) - 1; j >= 0 && curLo < curHi; j-- {
-					curLo, curHi = idx.BackwardSearchStep(bs[j], curLo, curHi)
-				}
-				if curLo < curHi {
-					next = append(next, Interval{curLo, curHi})
+			for _, c := range chars {
+				newLo, newHi := idx.BackwardSearchStep(c, iv.Lo, iv.Hi)
+				if newLo < newHi {
+					next = append(next, Interval{newLo, newHi})
 				}
 			}
 		}
