@@ -226,35 +226,47 @@ func evalRegex(idx *fmindex.Index, re *syntax.Regexp, lo, hi int) []Interval {
 
 // evalLiteral processes a multi-character literal (re.Rune) right-to-left.
 // foldCase enables case-insensitive matching for ASCII letters.
+// Non-ASCII runes are encoded as their UTF-8 byte sequences and each byte is
+// fed into the backward search in right-to-left order.
 func evalLiteral(idx *fmindex.Index, runes []rune, lo, hi int, foldCase bool) []Interval {
 	intervals := []Interval{{lo, hi}}
 	for i := len(runes) - 1; i >= 0 && len(intervals) > 0; i-- {
 		r := runes[i]
-		// Only ASCII is supported; skip non-ASCII runes.
-		if r > 127 {
-			return nil
-		}
-		var chars []byte
-		b := byte(r)
-		if foldCase {
-			switch {
-			case b >= 'a' && b <= 'z':
-				chars = []byte{b, b - 32}
-			case b >= 'A' && b <= 'Z':
-				chars = []byte{b, b + 32}
-			default:
-				chars = []byte{b}
+
+		// Build the set of byte sequences to try for this rune.
+		// ASCII: optionally case-fold to a second sequence.
+		// Non-ASCII: one UTF-8 byte sequence; case-folding is not applied.
+		var seqs [][]byte
+		if r <= 127 {
+			b := byte(r)
+			if foldCase {
+				switch {
+				case b >= 'a' && b <= 'z':
+					seqs = [][]byte{{b}, {b - 32}}
+				case b >= 'A' && b <= 'Z':
+					seqs = [][]byte{{b}, {b + 32}}
+				default:
+					seqs = [][]byte{{b}}
+				}
+			} else {
+				seqs = [][]byte{{b}}
 			}
 		} else {
-			chars = []byte{b}
+			// Encode the rune as UTF-8 and treat each byte individually.
+			seqs = [][]byte{[]byte(string(r))}
 		}
 
 		var next []Interval
 		for _, iv := range intervals {
-			for _, c := range chars {
-				newLo, newHi := idx.BackwardSearchStep(c, iv.Lo, iv.Hi)
-				if newLo < newHi {
-					next = append(next, Interval{newLo, newHi})
+			for _, bs := range seqs {
+				// Apply backward search steps right-to-left over the bytes of
+				// this rune (or character).
+				curLo, curHi := iv.Lo, iv.Hi
+				for j := len(bs) - 1; j >= 0 && curLo < curHi; j-- {
+					curLo, curHi = idx.BackwardSearchStep(bs[j], curLo, curHi)
+				}
+				if curLo < curHi {
+					next = append(next, Interval{curLo, curHi})
 				}
 			}
 		}
