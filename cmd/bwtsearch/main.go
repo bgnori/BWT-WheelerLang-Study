@@ -28,6 +28,8 @@ func main() {
 	switch os.Args[1] {
 	case "build":
 		err = runBuild(os.Args[2:])
+	case "build-multi":
+		err = runBuildMulti(os.Args[2:])
 	case "info":
 		err = runInfo(os.Args[2:])
 	case "graph":
@@ -60,6 +62,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  build <input-file> <index-file>")
+	fmt.Fprintln(os.Stderr, "  build-multi <index-file> <file1> [file2 ...]")
 	fmt.Fprintln(os.Stderr, "  info <index-file>")
 	fmt.Fprintln(os.Stderr, "  graph [flags] <index-file>")
 	fmt.Fprintln(os.Stderr, "  browse <index-file> [--show N] [--context N]")
@@ -96,6 +99,40 @@ func runBuild(args []string) error {
 		return fmt.Errorf("write index: %w", err)
 	}
 	fmt.Printf("built index: %s (%d bytes)\n", indexPath, idx.TextLen())
+	return nil
+}
+
+func runBuildMulti(args []string) error {
+	fs := flag.NewFlagSet("build-multi", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() < 2 {
+		return fmt.Errorf("usage: bwtsearch build-multi <index-file> <file1> [file2 ...]")
+	}
+
+	indexPath := fs.Arg(0)
+	var texts [][]byte
+	for _, path := range fs.Args()[1:] {
+		text, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read input %s: %w", path, err)
+		}
+		texts = append(texts, text)
+	}
+
+	idx := bwtsearch.BuildFromFiles(texts, nil)
+	out, err := os.Create(indexPath)
+	if err != nil {
+		return fmt.Errorf("create index: %w", err)
+	}
+	defer out.Close()
+
+	if _, err := idx.WriteTo(out); err != nil {
+		return fmt.Errorf("write index: %w", err)
+	}
+	fmt.Printf("built index from %d files: %s (%d bytes)\n", len(texts), indexPath, idx.TextLen())
 	return nil
 }
 

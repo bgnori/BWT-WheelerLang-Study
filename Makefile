@@ -1,9 +1,11 @@
-.PHONY: all build test lint clean download-testdata download-kenshin docker-build docker-run
+.PHONY: all build test lint clean download-testdata download-kenshin download-git docker-build docker-run
 
 BINARY  := bwtsearch
 DATADIR := data
 INDEXFILE := $(DATADIR)/moby_dick.idx
 KENSHIN_INDEXFILE := $(DATADIR)/kenshin.idx
+GIT_SRC_DIR := $(DATADIR)/git-src
+GIT_INDEXFILE := $(DATADIR)/git.idx
 
 all: build
 
@@ -69,6 +71,25 @@ docker-build:
 ## docker-run: run an interactive bwtsearch container
 docker-run:
 	docker compose run bwtsearch
+
+## download-git: download Git source code (.c/.h files) into data/git-src/
+download-git:
+	@mkdir -p $(DATADIR)
+	./scripts/download_git.sh $(DATADIR)
+
+## build-index-git: build the FM-index from the Git source files
+build-index-git: $(GIT_SRC_DIR)
+	find $(GIT_SRC_DIR) -type f \( -name "*.c" -o -name "*.h" \) | sort | \
+	    xargs ./$(BINARY) build-multi $(GIT_INDEXFILE)
+
+## search-demo-git: run a sample search on the Git source index
+search-demo-git: $(GIT_INDEXFILE)
+	./$(BINARY) search --limit 10 $(GIT_INDEXFILE) "commit"
+
+## compare-demo-git: compare FM-index vs stdlib for a sample pattern
+compare-demo-git: $(GIT_SRC_DIR)
+	cat $(GIT_SRC_DIR)/commit.c | ./$(BINARY) compare /dev/stdin "commit" 2>/dev/null || \
+	    find $(GIT_SRC_DIR) -name "*.c" | head -1 | xargs -I{} ./$(BINARY) compare {} "commit"
 
 help:
 	@grep -E '^## ' Makefile | sed 's/## /  /'

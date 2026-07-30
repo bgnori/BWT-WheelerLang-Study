@@ -39,5 +39,8 @@ data/*.txt
 data/*.idx
 data/*.bin
 
+# Git source code downloaded for indexing tests — must NOT be committed
+data/git-src/
+
 # Keep the data directory itself (with its .gitkeep placeholder)
 !data/.gitkeep
