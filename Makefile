@@ -1,8 +1,9 @@
-.PHONY: all build test lint clean download-testdata docker-build docker-run
+.PHONY: all build test lint clean download-testdata download-kenshin docker-build docker-run
 
 BINARY  := bwtsearch
 DATADIR := data
 INDEXFILE := $(DATADIR)/moby_dick.idx
+KENSHIN_INDEXFILE := $(DATADIR)/kenshin.idx
 
 all: build
 
@@ -38,11 +39,28 @@ build-index: $(DATADIR)/moby_dick.txt
 
 ## search-demo: run a sample search on the Moby Dick index
 search-demo: $(INDEXFILE)
-	./$(BINARY) search $(INDEXFILE) "white whale" --limit 10
+	./$(BINARY) search --limit 10 $(INDEXFILE) "white whale"
 
 ## compare-demo: compare FM-index vs stdlib for a sample pattern
 compare-demo: $(DATADIR)/moby_dick.txt
 	./$(BINARY) compare $(DATADIR)/moby_dick.txt "whale"
+
+## download-kenshin: download Aozora Bunko 上杉謙信 and convert to UTF-8 (not committed)
+download-kenshin:
+	@mkdir -p $(DATADIR)
+	./scripts/download_kenshin.sh $(DATADIR)
+
+## build-index-kenshin: build the FM-index from the 上杉謙信 text
+build-index-kenshin: $(DATADIR)/kenshin.txt
+	./$(BINARY) build $(DATADIR)/kenshin.txt $(KENSHIN_INDEXFILE)
+
+## search-demo-kenshin: run a sample search on the 上杉謙信 index
+search-demo-kenshin: $(KENSHIN_INDEXFILE)
+	./$(BINARY) search --limit 5 $(KENSHIN_INDEXFILE) "上杉謙信"
+
+## compare-demo-kenshin: compare FM-index vs stdlib for a sample pattern
+compare-demo-kenshin: $(DATADIR)/kenshin.txt
+	./$(BINARY) compare $(DATADIR)/kenshin.txt "上杉謙信"
 
 ## docker-build: build the Docker image
 docker-build:

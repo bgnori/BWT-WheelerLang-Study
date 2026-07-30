@@ -23,3 +23,19 @@ services:
              echo 'Downloaded moby_dick.txt'"
     volumes:
       - ./data:/data
+
+  # Convenience service that downloads and converts the Aozora Bunko 上杉謙信 corpus.
+  download-kenshin:
+    image: alpine:3.19
+    command: >
+      sh -c "apk --no-cache add wget unzip &&
+             mkdir -p /data &&
+             wget -q -O /tmp/kenshin.zip
+               'https://www.aozora.gr.jp/cards/001562/files/56461_ruby_53134.zip' &&
+             unzip -q /tmp/kenshin.zip -d /tmp/kenshin_extract &&
+             SJIS=$(find /tmp/kenshin_extract -name '*.txt' | head -1) &&
+             iconv -f CP932 -t UTF-8 \"\$SJIS\" > /data/kenshin.txt &&
+             rm -rf /tmp/kenshin.zip /tmp/kenshin_extract &&
+             echo 'Downloaded and converted kenshin.txt'"
+    volumes:
+      - ./data:/data

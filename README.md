@@ -54,6 +54,15 @@ docker compose run bwtsearch build /data/moby_dick.txt /data/moby_dick.idx
 
 # 検索
 docker compose run bwtsearch search /data/moby_dick.idx "white whale"
+
+# 上杉謙信テキストをダウンロード・変換（Shift-JIS → UTF-8 を自動処理）
+docker compose run download-kenshin
+
+# 上杉謙信 FM-index を構築
+docker compose run bwtsearch build /data/kenshin.txt /data/kenshin.idx
+
+# 上杉謙信を検索
+docker compose run bwtsearch search /data/kenshin.idx "上杉謙信"
 ```
 
 ### ローカルで Go を使う場合
@@ -203,6 +212,8 @@ bwtsearch web --index data/moby_dick.idx --addr :8080
 
 ## テストデータ
 
+### Moby Dick（英語サンプル）
+
 [Project Gutenberg #2701 (Moby Dick)](https://www.gutenberg.org/ebooks/2701) を使用します。
 
 ```bash
@@ -210,6 +221,71 @@ bwtsearch web --index data/moby_dick.idx --addr :8080
 # または
 make download-testdata
 ```
+
+### 上杉謙信（非ASCII・日本語サンプル）
+
+[青空文庫 図書カード No.56461「上杉謙信」](https://www.aozora.gr.jp/cards/001562/card56461.html) を使用します。
+
+青空文庫のテキストは **Shift-JIS (CP932)** でエンコードされています。ダウンロードスクリプトは Zip を展開後、`iconv`（または Python）を使って **UTF-8** に変換してから `data/kenshin.txt` に保存します。FM-index はバイト列として動作するため、UTF-8 変換後のテキストをそのまま索引化できます。
+
+```bash
+./scripts/download_kenshin.sh
+# または
+make download-kenshin
+```
+
+#### ローカル（Go）での手順
+
+```bash
+# 1. テキストをダウンロード・変換
+make download-kenshin
+
+# 2. FM-index を構築
+make build-index-kenshin
+
+# 3. サンプル検索（「上杉謙信」をリテラル検索）
+make search-demo-kenshin
+
+# 4. FM-index vs 標準ライブラリの比較
+make compare-demo-kenshin
+```
+
+直接 CLI で操作する場合:
+
+```bash
+# インデックス構築
+./bwtsearch build data/kenshin.txt data/kenshin.idx
+
+# 検索（UTF-8 パターンをそのまま指定）
+./bwtsearch search data/kenshin.idx "上杉謙信" --limit 5
+
+# インデックス情報
+./bwtsearch info data/kenshin.idx
+```
+
+#### Docker での手順
+
+```bash
+# イメージをビルド
+docker compose build
+
+# テキストをダウンロード・変換
+docker compose run download-kenshin
+
+# FM-index を構築
+docker compose run bwtsearch build /data/kenshin.txt /data/kenshin.idx
+
+# 検索
+docker compose run bwtsearch search /data/kenshin.idx "上杉謙信"
+```
+
+#### 非ASCII文字（UTF-8）処理の注意点
+
+- **エンコーディング**: 青空文庫テキストは Shift-JIS (CP932) です。スクリプトが自動で UTF-8 に変換します。
+- **インデックスはバイト単位**: FM-index の後方検索はバイト列上で動作します。UTF-8 の日本語文字は 3 バイトなので、検索パターンも UTF-8 文字列をそのまま渡せます。
+- **コンテキスト表示の境界補正**: `ContextAround` は表示スニペットの前後を UTF-8 のルーン境界に合わせて調整するため、文字が途中で切れて文字化けすることはありません。
+- **青空文庫ルビ記法**: テキストには `《》` などのルビ記法が残っています。検索パターンに含めることも可能です。
+- **ゼロバイト**: FM-index はゼロバイト（0x00）を番兵として使用します。UTF-8 テキストにゼロバイトが含まれる場合は索引化前に除去が必要ですが、通常の青空文庫テキストには含まれません。
 
 > **注意：** テキストデータおよびインデックスファイル（`data/*.txt`, `data/*.idx`）は `.gitignore` に登録されており、リポジトリにはコミットしないでください。
 

@@ -29,6 +29,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/bgnori/bwt-wheelerlang-study/internal/bitvector"
 )
@@ -207,8 +208,9 @@ func (idx *Index) Locate(p []byte, limit int) []int {
 }
 
 // ContextAround returns a human-readable snippet of text centred on position
-// pos, showing ctxSize characters on each side plus patLen characters of the
-// match itself.
+// pos, showing ctxSize bytes on each side plus patLen bytes of the match
+// itself.  Start and end positions are adjusted outward to avoid splitting
+// multi-byte UTF-8 characters.
 func (idx *Index) ContextAround(pos, patLen, ctxSize int) string {
 	n := len(idx.text)
 	start := pos - ctxSize
@@ -218,6 +220,16 @@ func (idx *Index) ContextAround(pos, patLen, ctxSize int) string {
 	end := pos + patLen + ctxSize
 	if end > n {
 		end = n
+	}
+	// Align start to the beginning of a UTF-8 rune so we don't return a
+	// partial multi-byte sequence before the match.
+	for start > 0 && !utf8.RuneStart(idx.text[start]) {
+		start--
+	}
+	// Align end to the start of the next rune (or end of text) so we don't
+	// return a partial multi-byte sequence after the match.
+	for end < n && !utf8.RuneStart(idx.text[end]) {
+		end++
 	}
 	return string(idx.text[start:end])
 }
