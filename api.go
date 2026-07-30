@@ -58,6 +58,32 @@ func Build(text []byte) *Index {
 	return &Index{inner: fmindex.Build(text)}
 }
 
+// BuildFromFiles concatenates texts with separator and builds a single
+// FM-index over the combined corpus. If separator is nil a newline (\n) is
+// used. The separator must not contain 0x00, which is reserved as the
+// FM-index sentinel.
+func BuildFromFiles(texts [][]byte, separator []byte) *Index {
+	if separator == nil {
+		separator = []byte{'\n'}
+	}
+	if len(texts) == 0 {
+		return Build(nil)
+	}
+	total := 0
+	for _, t := range texts {
+		total += len(t)
+	}
+	total += len(separator) * (len(texts) - 1)
+	combined := make([]byte, 0, total)
+	for i, t := range texts {
+		if i > 0 {
+			combined = append(combined, separator...)
+		}
+		combined = append(combined, t...)
+	}
+	return Build(combined)
+}
+
 // BuildWithAlgorithm constructs an index from text with an explicit algorithm.
 func BuildWithAlgorithm(text []byte, algo SuffixArrayAlgorithm) *Index {
 	return &Index{inner: fmindex.BuildWithAlgorithm(text, fmindex.SuffixArrayAlgorithm(algo))}
