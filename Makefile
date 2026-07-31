@@ -1,4 +1,4 @@
-.PHONY: all build test lint clean download-moby-dick download-testdata download-kenshin download-git download-ecoli prepare-ecoli download-osativa-chr1 prepare-osativa-chr1 download-amazon-small prepare-amazon-small download-amazon-medium prepare-amazon-medium download-amazon-large prepare-amazon-large build-index-moby-dick build-index build-search-demo search-demo suffixarray-demo-moby-dick suffixarray-demo generate-fake-logs generate-fake-log-apache-common generate-fake-log-apache-error generate-fake-log-syslog generate-fake-log-json generate-fake-log-logfmt docker-build docker-run
+.PHONY: all build test lint clean download-moby-dick download-testdata download-kenshin download-git download-ecoli prepare-ecoli download-osativa download-osativa-chr1 prepare-osativa-chr1 download-amazon-small prepare-amazon-small download-amazon-medium prepare-amazon-medium download-amazon-large prepare-amazon-large build-index-moby-dick build-index build-search-demo search-demo suffixarray-demo-moby-dick suffixarray-demo generate-fake-logs generate-fake-log-apache-common generate-fake-log-apache-error generate-fake-log-syslog generate-fake-log-json generate-fake-log-logfmt docker-build docker-run
 
 BINARY  := bwtsearch
 DATADIR := data
@@ -7,7 +7,9 @@ KENSHIN_INDEXFILE := $(DATADIR)/kenshin.idx
 GIT_SRC_DIR := $(DATADIR)/git-src
 GIT_INDEXFILE := $(DATADIR)/git.idx
 ECOLI_INDEXFILE := $(DATADIR)/ecoli.idx
+OSATIVA_FASTA := $(DATADIR)/osativa.fna
 OSATIVA_CHR1_INDEXFILE := $(DATADIR)/osativa_chr1.idx
+OSATIVA_CHR1_SELECTOR ?= AP014957[.]1
 AMAZON_SMALL_TEXT := $(DATADIR)/amazon_small.txt
 AMAZON_MEDIUM_TEXT := $(DATADIR)/amazon_medium.txt
 AMAZON_LARGE_TEXT := $(DATADIR)/amazon_large.txt
@@ -106,14 +108,17 @@ download-ecoli:
 prepare-ecoli: $(DATADIR)/ecoli.fna
 	./scripts/prepare_ecoli.sh $(DATADIR)
 
-## download-osativa-chr1: download Oryza sativa chromosome 1 FASTA from NCBI (not committed)
-download-osativa-chr1:
+## download-osativa: download Oryza sativa genome FASTA from NCBI (not committed)
+download-osativa:
 	@mkdir -p $(DATADIR)
-	./scripts/download_osativa_chr1.sh $(DATADIR)
+	./scripts/download_osativa.sh $(DATADIR)
 
-## prepare-osativa-chr1: convert Oryza sativa chromosome 1 FASTA to plain-text DNA (not committed)
-prepare-osativa-chr1: $(DATADIR)/osativa_chr1.fna
-	./scripts/prepare_ecoli.sh $(DATADIR) osativa_chr1.fna osativa_chr1.txt
+## download-osativa-chr1: backward compatible alias for downloading Oryza sativa genome FASTA
+download-osativa-chr1: download-osativa
+
+## prepare-osativa-chr1: extract Oryza sativa chromosome 1 from the genome FASTA as plain-text DNA
+prepare-osativa-chr1: $(OSATIVA_FASTA)
+	./scripts/prepare_fasta_records.sh $(DATADIR) osativa.fna osativa_chr1.txt '$(OSATIVA_CHR1_SELECTOR)'
 
 ## download-amazon-small: download Kaggle Amazon Laptop Prices Dataset (not committed)
 download-amazon-small:

@@ -53,15 +53,24 @@ make search-demo-ecoli
 make suffixarray-demo-ecoli
 ```
 
-## 5. Oryza sativa（イネ）第1染色体
+## 5. Oryza sativa（イネ）
 
 - ソース: [NCBI GenBank Assembly GCA_001433935.1](https://www.ncbi.nlm.nih.gov/datasets/genome/GCA_001433935.1/)
+- `download-osativa` は全ゲノム FASTA を `data/osativa.fna` として取得します。
+- `prepare-osativa-chr1` は全ゲノム FASTA から chromosome 1（既定: `AP014957.1`）を抽出し、索引対象の `data/osativa_chr1.txt` を作成します。
+- 別の FASTA レコードを対象にする場合は `OSATIVA_CHR1_SELECTOR` に awk 拡張正規表現を指定できます。
 
 ```bash
-make download-osativa-chr1
+make download-osativa
 make prepare-osativa-chr1
 make build-index-osativa-chr1
 make search-demo-osativa-chr1
+
+# 互換エイリアス: 全ゲノム FASTA を取得
+make download-osativa-chr1
+
+# 例: chromosome 2 を既存ターゲットの出力名で抽出する場合
+make prepare-osativa-chr1 OSATIVA_CHR1_SELECTOR='AP014958[.]1'
 ```
 
 ## 6. Kaggle Amazon データセット（小/中/大）
@@ -118,4 +127,4 @@ make generate-fake-log-logfmt FAKE_LOG_SIZE=5M
 
 ## Docker での利用
 
-主要なデータ取得は `docker compose run <service>` でも実行できます（例: `download`, `download-kenshin`, `download-git`, `download-ecoli`, `download-osativa-chr1`）。
+主要なデータ取得は `docker compose run <service>` でも実行できます（例: `download`, `download-kenshin`, `download-git`, `download-ecoli`, `download-osativa`）。
