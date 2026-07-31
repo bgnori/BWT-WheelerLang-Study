@@ -118,7 +118,7 @@ res, err := bwtsearch.Search(idx, "[あ-を]", 0)
 
 ---
 
-## #5 — `Search` が正規表現を 2 回パースしている 🟡
+## #5 — `Search` が正規表現を 2 回パースしている 🟡 ✅ 対応済み
 
 **ファイル:** `internal/starfree/starfree.go`
 
