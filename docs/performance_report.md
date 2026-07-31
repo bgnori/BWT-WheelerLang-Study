@@ -185,7 +185,53 @@
 
 ---
 
-## 5) まとめ
+## 5) 一般的な正規表現走査との比較（速度・メモリ・償却回数）
+
+前提条件が大きく異なるため厳密な apples-to-apples 比較ではありませんが、
+「インデックスなしの一般的な正規表現検索」を想定した基準として、Go標準 `regexp` による全文走査と比較しました。
+
+- FM 側: `bwtsearch.Search`（インデックスは事前構築済み、プロセス内で繰り返し検索）
+- 走査側: Go標準 `regexp` の `FindAllIndex`（テキスト全体を毎回走査）
+- 各条件5回実行し、中央値を採用
+
+### 検索性能・メモリ比較（中央値）
+
+| データセット | パターン | エンジン | 1検索あたり ms | peak_rss_kb |
+|---|---|---|---:|---:|
+| MobyDick | `white|whale` | FM-index(in-memory) | 0.382 | 54,416 |
+| MobyDick | `white|whale` | Go regexp(scan) | 6.473 | 8,912 |
+| Kenshin | `上杉謙信|武田信玄` | FM-index(in-memory) | 0.267 | 12,484 |
+| Kenshin | `上杉謙信|武田信玄` | Go regexp(scan) | 29.145 | 3,996 |
+| GitSource | `commit|diff` | FM-index(in-memory) | 17.470 | 408,976 |
+| GitSource | `commit|diff` | Go regexp(scan) | 1,861.854 | 25,580 |
+
+### インデックス構築コストの償却回数（概算）
+
+償却回数 $Q$ は次式で算出しました。
+
+$$
+Q = \frac{T_{build\_fm}}{T_{scan\_per\_query} - T_{fm\_per\_query}}
+$$
+
+- $T_{build\_fm}$: FM/SAIS 構築時間（秒）
+- $T_{scan\_per\_query}$: 走査型正規表現の1検索時間（秒）
+- $T_{fm\_per\_query}$: FM-index の1検索時間（秒）
+
+| データセット | build_sec (FM/SAIS) | FM ms/query | Scan ms/query | 償却回数Q（検索回） |
+|---|---:|---:|---:|---:|
+| MobyDick | 0.597 | 0.382 | 6.473 | 98.0 |
+| Kenshin | 0.158 | 0.267 | 29.145 | 5.5 |
+| GitSource | 7.889 | 17.470 | 1,861.854 | 4.3 |
+
+注:
+
+- ここでの `peak_rss_kb` はプロセス単位サンプリングによる近似値です。
+- FM-index はインデックス常駐コストを払う代わりに、繰り返し検索で大きく有利になる傾向が確認できました。
+- パターンは比較可能性を優先し、FM 側で評価可能な形（OR 中心）を使用しています。
+
+---
+
+## 6) まとめ
 
 - **構築速度**: すべてのデータセットで Doubling は遅く、実用上は SA-IS 系が優位。
 - **検索速度（完全一致）**: `Bitvectors` と `BiFM(Bitvectors)` が最速帯。`WaveletTree/Matrix` は 1 桁以上遅い傾向。
@@ -193,3 +239,4 @@
 - **FM vs Stdlib（go test）**: 構築では stdlib が有利だが、検索（特にログ系）では FM 系が大幅に高速。
 - **FM vs Stdlib（CLI 実測）**: FM/SAIS はインデックスサイズとピークRSSが大きくなる一方、データセットによっては検索時に有利（例: OsativaChr1）。
 - **MobyDick（CLI 実測）**: 構築は stdlib が軽量（6.3MB index, 16MB級RSS）で、検索は FM/SAIS がわずかに高速（0.069s vs 0.084s）。
+- **一般正規表現走査との比較**: 1検索あたり速度は FM-index が優位で、MobyDick で約98回、Kenshin で約6回、GitSource で約5回の検索で構築コストを償却できる目安になった。
