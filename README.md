@@ -82,6 +82,9 @@ make test
 # テストデータのダウンロード（コミット禁止）
 make download-testdata
 
+# fakeログを生成（5種類を一括、サイズ指定可）
+make generate-fake-logs FAKE_LOG_SIZE=10M
+
 # FM-index の構築
 make build-index
 
@@ -529,6 +532,45 @@ make build-index-amazon-large
 
 > **注意：** Kaggle の zip/csv/tsv などの生データと、生成される `.txt` / `.idx` は `.gitignore` で除外されます。リポジトリへコミットしないでください。
 
+### Fakeログ（flog / mclogs）
+
+`flog` と `mclogs` を使って、以下の 5 種類のログを `data/fake-logs/` に生成できます。
+
+- `flog`: Apache 標準ログ（`apache_common`）
+- `flog`: Apache エラーログ（`apache_error`）
+- `flog`: Syslog（`rfc3164`）
+- `mclogs`: JSON 形式
+- `mclogs`: logfmt 形式
+
+サイズは `FAKE_LOG_SIZE` で指定できます（例: `512K`, `10M`, `1G`）。
+
+```bash
+# 5種類をまとめて生成（既定 1M）
+make generate-fake-logs
+
+# サイズ指定
+make generate-fake-logs FAKE_LOG_SIZE=10M
+
+# 個別生成
+make generate-fake-log-apache-common FAKE_LOG_SIZE=5M
+make generate-fake-log-apache-error FAKE_LOG_SIZE=5M
+make generate-fake-log-syslog FAKE_LOG_SIZE=5M
+make generate-fake-log-json FAKE_LOG_SIZE=5M
+make generate-fake-log-logfmt FAKE_LOG_SIZE=5M
+```
+
+直接スクリプトを使う場合:
+
+```bash
+./scripts/generate_fake_logs.sh apache-common 10M
+./scripts/generate_fake_logs.sh apache-error 10M
+./scripts/generate_fake_logs.sh syslog 10M
+./scripts/generate_fake_logs.sh json 10M
+./scripts/generate_fake_logs.sh logfmt 10M
+```
+
+> **注意：** `flog` / `mclogs` コマンドがローカルに必要です。生成ログ（`data/fake-logs/`）は `.gitignore` で除外され、コミット対象外です。
+
 ### Git LFS について
 
 このリポジトリは **現時点では Git LFS を必須としていません**。大容量になりやすいデータは `data/` 配下に置き、`.gitignore` で管理します。
@@ -548,7 +590,7 @@ internal/
   fmindex/     ── FM-index：BWT・SA・Occ・C 配列の構築・検索・永続化
   starfree/    ── 星なし正規表現の検証と FM-index 上の後方検索
 cmd/bwtsearch/ ── CLI エントリポイント
-scripts/       ── テストデータダウンロードスクリプト
+scripts/       ── テストデータのダウンロード/生成スクリプト
 data/          ── テストデータ置き場（.gitignore 対象）
 ```
 

@@ -1,4 +1,4 @@
-.PHONY: all build test lint clean download-testdata download-kenshin download-git download-ecoli prepare-ecoli download-osativa-chr1 prepare-osativa-chr1 download-amazon-small prepare-amazon-small download-amazon-medium prepare-amazon-medium download-amazon-large prepare-amazon-large docker-build docker-run
+.PHONY: all build test lint clean download-testdata download-kenshin download-git download-ecoli prepare-ecoli download-osativa-chr1 prepare-osativa-chr1 download-amazon-small prepare-amazon-small download-amazon-medium prepare-amazon-medium download-amazon-large prepare-amazon-large generate-fake-logs generate-fake-log-apache-common generate-fake-log-apache-error generate-fake-log-syslog generate-fake-log-json generate-fake-log-logfmt docker-build docker-run
 
 BINARY  := bwtsearch
 DATADIR := data
@@ -11,6 +11,7 @@ OSATIVA_CHR1_INDEXFILE := $(DATADIR)/osativa_chr1.idx
 AMAZON_SMALL_TEXT := $(DATADIR)/amazon_small.txt
 AMAZON_MEDIUM_TEXT := $(DATADIR)/amazon_medium.txt
 AMAZON_LARGE_TEXT := $(DATADIR)/amazon_large.txt
+FAKE_LOG_SIZE ?= 1M
 
 all: build
 
@@ -128,6 +129,34 @@ download-amazon-large:
 ## prepare-amazon-large: preprocess Kaggle Amazon Product Dataset (100K+) to plain text
 prepare-amazon-large:
 	./scripts/prepare_kaggle_amazon.sh large $(DATADIR) amazon_large.txt
+
+## generate-fake-logs: generate all 5 fake log datasets (flog + mclogs)
+generate-fake-logs: generate-fake-log-apache-common generate-fake-log-apache-error generate-fake-log-syslog generate-fake-log-json generate-fake-log-logfmt
+
+## generate-fake-log-apache-common: generate Apache access log via flog
+generate-fake-log-apache-common:
+	@mkdir -p $(DATADIR)
+	./scripts/generate_fake_logs.sh apache-common $(FAKE_LOG_SIZE) $(DATADIR)
+
+## generate-fake-log-apache-error: generate Apache error log via flog
+generate-fake-log-apache-error:
+	@mkdir -p $(DATADIR)
+	./scripts/generate_fake_logs.sh apache-error $(FAKE_LOG_SIZE) $(DATADIR)
+
+## generate-fake-log-syslog: generate Syslog (RFC3164) via flog
+generate-fake-log-syslog:
+	@mkdir -p $(DATADIR)
+	./scripts/generate_fake_logs.sh syslog $(FAKE_LOG_SIZE) $(DATADIR)
+
+## generate-fake-log-json: generate JSON logs via mclogs
+generate-fake-log-json:
+	@mkdir -p $(DATADIR)
+	./scripts/generate_fake_logs.sh json $(FAKE_LOG_SIZE) $(DATADIR)
+
+## generate-fake-log-logfmt: generate logfmt logs via mclogs
+generate-fake-log-logfmt:
+	@mkdir -p $(DATADIR)
+	./scripts/generate_fake_logs.sh logfmt $(FAKE_LOG_SIZE) $(DATADIR)
 
 ## build-index-git: build the FM-index from the Git source files
 build-index-git: $(GIT_SRC_DIR)

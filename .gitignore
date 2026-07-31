@@ -53,3 +53,6 @@ data/*.zip
 
 # Keep the data directory itself (with its .gitkeep placeholder)
 !data/.gitkeep
+
+# Fake logs generated for benchmark/test data — must NOT be committed
+data/fake-logs/
