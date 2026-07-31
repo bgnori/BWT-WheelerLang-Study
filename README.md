@@ -22,10 +22,11 @@ import bwtsearch "github.com/bgnori/bwt-wheelerlang-study"
 
 主なAPI：
 
-- `bwtsearch.Build`, `bwtsearch.BuildWithAlgorithm`
+- `bwtsearch.Build`, `bwtsearch.BuildWithAlgorithm`, `bwtsearch.BuildWithOptions`, `bwtsearch.BuildFromFiles`
 - `bwtsearch.Load`, `bwtsearch.ReadFrom`
-- `(*bwtsearch.Index).Save`, `(*bwtsearch.Index).Append`, `(*bwtsearch.Index).Count`, `(*bwtsearch.Index).Locate`
+- `(*bwtsearch.Index).Save`, `(*bwtsearch.Index).WriteTo`, `(*bwtsearch.Index).Append`, `(*bwtsearch.Index).Count`, `(*bwtsearch.Index).Locate`
 - `bwtsearch.Check`, `bwtsearch.Search`（星なし正規表現検索）
+- エラー型: `bwtsearch.ViolationError`（星なし制約違反）、`bwtsearch.UnsupportedError`（非対応構文）
 
 詳細は `docs/library_api.md` を参照してください。
 
@@ -304,6 +305,7 @@ docker compose run bwtsearch search /data/kenshin.idx "上杉謙信"
 ```
 internal/
   bitvector/   ── 簡潔ビットベクトル（Rank1/Rank0）
+  wavelet/     ── ウェーブレット木（O(log σ) Rank 演算）
   fmindex/     ── FM-index：BWT・SA・Occ・C 配列の構築・検索・永続化
   starfree/    ── 星なし正規表現の検証と FM-index 上の後方検索
 cmd/bwtsearch/ ── CLI エントリポイント
