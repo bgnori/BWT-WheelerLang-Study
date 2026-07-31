@@ -465,3 +465,144 @@ func TestAppendMatchesRebuildWavelet(t *testing.T) {
 		}
 	}
 }
+
+// --- Wavelet Matrix tests ---------------------------------------------------
+
+func TestWaveletMatrixMatchesBitvectors(t *testing.T) {
+	texts := []string{
+		"banana",
+		"mississippi",
+		"abracadabra",
+		"the quick brown fox jumps over the lazy dog",
+		"aaaaabbbbbccccc",
+		"aaaaaaaaaa",
+		"",
+	}
+	patterns := []string{"a", "an", "the", "ab", "ccc", "xyz", "aa"}
+
+	for _, textStr := range texts {
+		text := []byte(textStr)
+		idxBV := Build(text)
+		idxWM := BuildWithOptions(text, AlgorithmDoubling, OccWaveletMatrix)
+
+		for _, pat := range patterns {
+			p := []byte(pat)
+			if gotBV, gotWM := idxBV.Count(p), idxWM.Count(p); gotBV != gotWM {
+				t.Errorf("text=%q pat=%q: bitvectors=%d waveletmatrix=%d", textStr, pat, gotBV, gotWM)
+			}
+			posBV := sortedPositions(idxBV.Locate(p, 0))
+			posWM := sortedPositions(idxWM.Locate(p, 0))
+			if !intSliceEqual(posBV, posWM) {
+				t.Errorf("text=%q pat=%q: bitvectors locate=%v waveletmatrix locate=%v",
+					textStr, pat, posBV, posWM)
+			}
+		}
+	}
+}
+
+func TestWaveletMatrixPersistence(t *testing.T) {
+	text := []byte("the quick brown fox jumps over the lazy dog")
+	idx := BuildWithOptions(text, AlgorithmSAIS, OccWaveletMatrix)
+
+	var buf bytes.Buffer
+	if _, err := idx.WriteTo(&buf); err != nil {
+		t.Fatal("WriteTo:", err)
+	}
+	idx2, err := ReadFrom(&buf)
+	if err != nil {
+		t.Fatal("ReadFrom:", err)
+	}
+
+	patterns := []string{"the", "fox", "dog", "quick", "xyz"}
+	for _, pat := range patterns {
+		p := []byte(pat)
+		if c1, c2 := idx.Count(p), idx2.Count(p); c1 != c2 {
+			t.Errorf("after waveletmatrix persistence, Count(%q): %d vs %d", pat, c1, c2)
+		}
+		pos1 := sortedPositions(idx.Locate(p, 0))
+		pos2 := sortedPositions(idx2.Locate(p, 0))
+		if !intSliceEqual(pos1, pos2) {
+			t.Errorf("after waveletmatrix persistence, Locate(%q): %v vs %v", pat, pos1, pos2)
+		}
+	}
+}
+
+// --- RLBWT tests -----------------------------------------------------------
+
+func TestRLBWTMatchesBitvectors(t *testing.T) {
+	texts := []string{
+		"banana",
+		"mississippi",
+		"abracadabra",
+		"the quick brown fox jumps over the lazy dog",
+		"aaaaabbbbbccccc",
+		"aaaaaaaaaa",
+		"",
+	}
+	patterns := []string{"a", "an", "the", "ab", "ccc", "xyz", "aa"}
+
+	for _, textStr := range texts {
+		text := []byte(textStr)
+		idxBV := Build(text)
+		idxRL := BuildWithOptions(text, AlgorithmDoubling, OccRLBWT)
+
+		for _, pat := range patterns {
+			p := []byte(pat)
+			if gotBV, gotRL := idxBV.Count(p), idxRL.Count(p); gotBV != gotRL {
+				t.Errorf("text=%q pat=%q: bitvectors=%d rlbwt=%d", textStr, pat, gotBV, gotRL)
+			}
+			posBV := sortedPositions(idxBV.Locate(p, 0))
+			posRL := sortedPositions(idxRL.Locate(p, 0))
+			if !intSliceEqual(posBV, posRL) {
+				t.Errorf("text=%q pat=%q: bitvectors locate=%v rlbwt locate=%v",
+					textStr, pat, posBV, posRL)
+			}
+		}
+	}
+}
+
+func TestRLBWTPersistence(t *testing.T) {
+	text := []byte("the quick brown fox jumps over the lazy dog")
+	idx := BuildWithOptions(text, AlgorithmSAIS, OccRLBWT)
+
+	var buf bytes.Buffer
+	if _, err := idx.WriteTo(&buf); err != nil {
+		t.Fatal("WriteTo:", err)
+	}
+	idx2, err := ReadFrom(&buf)
+	if err != nil {
+		t.Fatal("ReadFrom:", err)
+	}
+
+	patterns := []string{"the", "fox", "dog", "quick", "xyz"}
+	for _, pat := range patterns {
+		p := []byte(pat)
+		if c1, c2 := idx.Count(p), idx2.Count(p); c1 != c2 {
+			t.Errorf("after rlbwt persistence, Count(%q): %d vs %d", pat, c1, c2)
+		}
+		pos1 := sortedPositions(idx.Locate(p, 0))
+		pos2 := sortedPositions(idx2.Locate(p, 0))
+		if !intSliceEqual(pos1, pos2) {
+			t.Errorf("after rlbwt persistence, Locate(%q): %v vs %v", pat, pos1, pos2)
+		}
+	}
+}
+
+func TestNumBWTRunsAndOccType(t *testing.T) {
+	text := []byte("mississippi")
+	idxWM := BuildWithOptions(text, AlgorithmDoubling, OccWaveletMatrix)
+	if got := idxWM.OccType(); got != OccWaveletMatrix {
+		t.Errorf("OccType = %v, want OccWaveletMatrix", got)
+	}
+	idxRL := BuildWithOptions(text, AlgorithmDoubling, OccRLBWT)
+	if got := idxRL.OccType(); got != OccRLBWT {
+		t.Errorf("OccType = %v, want OccRLBWT", got)
+	}
+	// NumBWTRuns: alternating text should have more runs than repetitive.
+	idxAlt := BuildWithOptions([]byte("ababababab"), AlgorithmDoubling, OccRLBWT)
+	idxRep := BuildWithOptions([]byte("aaaaaaaaaa"), AlgorithmDoubling, OccRLBWT)
+	if idxAlt.NumBWTRuns() <= idxRep.NumBWTRuns() {
+		t.Errorf("alternating (%d runs) should have more BWT runs than repetitive (%d)",
+			idxAlt.NumBWTRuns(), idxRep.NumBWTRuns())
+	}
+}
