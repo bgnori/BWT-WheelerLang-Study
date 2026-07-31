@@ -56,6 +56,22 @@ const (
 	AlgorithmSAIS SuffixArrayAlgorithm = SuffixArrayAlgorithm(fmindex.AlgorithmSAIS)
 )
 
+// OccStructure selects the occurrence-array implementation inside the FM-index.
+type OccStructure int
+
+const (
+	// OccBitvectors uses one succinct bit-vector per distinct character
+	// (default).  Indexes built with this option are written in the
+	// FMIDX01 on-disk format for backward compatibility.
+	OccBitvectors OccStructure = OccStructure(fmindex.OccBitvectors)
+	// OccWaveletTree uses a Wavelet Tree over the BWT, providing O(log σ)
+	// rank queries and O(n log σ) total space.  This is advantageous when
+	// the alphabet is large or nearly all 256 byte values appear.
+	// Indexes built with this option are written in the FMIDX02 on-disk
+	// format.
+	OccWaveletTree OccStructure = OccStructure(fmindex.OccWaveletTree)
+)
+
 // Interval is a half-open suffix-array range [Lo, Hi).
 type Interval struct {
 	Lo int
@@ -129,6 +145,12 @@ func BuildFromFiles(texts [][]byte, separator []byte) *Index {
 // BuildWithAlgorithm constructs an index from text with an explicit algorithm.
 func BuildWithAlgorithm(text []byte, algo SuffixArrayAlgorithm) *Index {
 	return &Index{inner: fmindex.BuildWithAlgorithm(text, fmindex.SuffixArrayAlgorithm(algo))}
+}
+
+// BuildWithOptions constructs an index with an explicit suffix-array
+// construction algorithm and an explicit occurrence-array structure.
+func BuildWithOptions(text []byte, algo SuffixArrayAlgorithm, occ OccStructure) *Index {
+	return &Index{inner: fmindex.BuildWithOptions(text, fmindex.SuffixArrayAlgorithm(algo), fmindex.OccStructure(occ))}
 }
 
 // ReadFrom deserialises an index from r.

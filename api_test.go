@@ -108,3 +108,45 @@ func TestNilIndexErrors(t *testing.T) {
 		t.Fatal("expected error writing nil index")
 	}
 }
+
+func TestBuildWithOptionsWavelet(t *testing.T) {
+	idx := BuildWithOptions([]byte("abracadabra"), AlgorithmDoubling, OccWaveletTree)
+
+	if got := idx.Count([]byte("abra")); got != 2 {
+		t.Fatalf("Count(abra) = %d, want 2", got)
+	}
+	if got := idx.Count([]byte("xyz")); got != 0 {
+		t.Fatalf("Count(xyz) = %d, want 0", got)
+	}
+}
+
+func TestBuildWithOptionsWaveletMatchesBitvectors(t *testing.T) {
+	text := []byte("the quick brown fox jumps over the lazy dog")
+	idxBV := Build(text)
+	idxWT := BuildWithOptions(text, AlgorithmSAIS, OccWaveletTree)
+
+	patterns := []string{"the", "fox", "quick", "xyz"}
+	for _, pat := range patterns {
+		p := []byte(pat)
+		if got, want := idxWT.Count(p), idxBV.Count(p); got != want {
+			t.Errorf("Count(%q): wavelet=%d bitvectors=%d", pat, got, want)
+		}
+	}
+}
+
+func TestBuildWithOptionsWaveletPersistence(t *testing.T) {
+	idx := BuildWithOptions([]byte("abracadabra"), AlgorithmDoubling, OccWaveletTree)
+
+	var buf bytes.Buffer
+	if _, err := idx.WriteTo(&buf); err != nil {
+		t.Fatalf("WriteTo failed: %v", err)
+	}
+
+	loaded, err := ReadFrom(&buf)
+	if err != nil {
+		t.Fatalf("ReadFrom failed: %v", err)
+	}
+	if got := loaded.Count([]byte("abra")); got != 2 {
+		t.Fatalf("Count after reload = %d, want 2", got)
+	}
+}

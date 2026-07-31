@@ -41,12 +41,12 @@ const sentinel = byte(0)
 
 // Index is a fully-functional FM-index (Wheeler graph) for byte strings.
 type Index struct {
-	n    int                       // len(text) + 1  (includes sentinel)
-	text []byte                    // original text  (without sentinel)
-	bwt  []byte                    // Burrows-Wheeler Transform
-	sa   []int32                   // suffix array
-	c    [256]int                  // C array
-	occ  [256]*bitvector.BitVector // per-character rank bit-vectors
+	n    int          // len(text) + 1  (includes sentinel)
+	text []byte       // original text  (without sentinel)
+	bwt  []byte       // Burrows-Wheeler Transform
+	sa   []int32      // suffix array
+	c    [256]int     // C array
+	occ  occStructure // occurrence array (bitvectors or wavelet tree)
 }
 
 // SuffixArrayAlgorithm selects the suffix-array construction algorithm.
@@ -64,13 +64,20 @@ const (
 // Build constructs an FM-index from text using the default doubling algorithm.
 // The text must not contain the null byte (0x00); it is reserved as sentinel.
 func Build(text []byte) *Index {
-	return BuildWithAlgorithm(text, AlgorithmDoubling)
+	return BuildWithOptions(text, AlgorithmDoubling, OccBitvectors)
 }
 
 // BuildWithAlgorithm constructs an FM-index from text using the specified
 // suffix-array construction algorithm.
 // The text must not contain the null byte (0x00); it is reserved as sentinel.
 func BuildWithAlgorithm(text []byte, algo SuffixArrayAlgorithm) *Index {
+	return BuildWithOptions(text, algo, OccBitvectors)
+}
+
+// BuildWithOptions constructs an FM-index with an explicit suffix-array
+// construction algorithm and an explicit occurrence-array structure.
+// The text must not contain the null byte (0x00); it is reserved as sentinel.
+func BuildWithOptions(text []byte, algo SuffixArrayAlgorithm, occType OccStructure) *Index {
 	// --- 1. Append sentinel -------------------------------------------------
 	n := len(text) + 1
 	t := make([]byte, n)
@@ -108,19 +115,8 @@ func BuildWithAlgorithm(text []byte, algo SuffixArrayAlgorithm) *Index {
 		total += freq[i]
 	}
 
-	// --- 5. Occ bit-vectors  (one per distinct BWT character) ---------------
-	var occ [256]*bitvector.BitVector
-	for i, b := range bwt {
-		if occ[b] == nil {
-			occ[b] = bitvector.New(n)
-		}
-		occ[b].Set(i)
-	}
-	for i := range occ {
-		if occ[i] != nil {
-			occ[i].Build()
-		}
-	}
+	// --- 5. Occurrence array ------------------------------------------------
+	occ := buildOcc(bwt, occType)
 
 	// Convert SA to int32 to halve memory on 64-bit systems
 	sa32 := make([]int32, n)
@@ -151,10 +147,7 @@ func (idx *Index) SAAt(i int) int { return int(idx.sa[i]) }
 
 // OccCount returns the number of occurrences of byte b in BWT[0..i-1].
 func (idx *Index) OccCount(b byte, i int) int {
-	if idx.occ[b] == nil {
-		return 0
-	}
-	return idx.occ[b].Rank1(i)
+	return idx.occ.rank(b, i)
 }
 
 // CValue returns C[b]: the number of suffixes whose first character is
@@ -249,9 +242,13 @@ func (idx *Index) SuffixAt(saPos, maxLen int) string {
 
 // AlphabetSize returns the number of distinct characters present in the text.
 func (idx *Index) AlphabetSize() int {
+	var seen [256]bool
+	for _, b := range idx.bwt {
+		seen[b] = true
+	}
 	count := 0
-	for _, bv := range idx.occ {
-		if bv != nil && bv.TotalOnes() > 0 {
+	for _, s := range seen {
+		if s {
 			count++
 		}
 	}
@@ -397,7 +394,8 @@ func buildSuffixArray(text []byte) []int {
 
 // --- Persistence -----------------------------------------------------------
 
-const magic = "FMIDX01"
+const magic   = "FMIDX01" // bitvector-based occ
+const magicV2 = "FMIDX02" // wavelet-tree-based occ (occ rebuilt from BWT on load)
 
 // countingWriter wraps an io.Writer and tracks the total bytes written.
 type countingWriter struct {
@@ -412,8 +410,18 @@ func (cw *countingWriter) Write(p []byte) (int, error) {
 }
 
 // WriteTo serialises the index to w.
+// Bitvector-based indexes use the FMIDX01 format (backward compatible).
+// Wavelet-tree-based indexes use the FMIDX02 format.
 // It implements io.WriterTo.
 func (idx *Index) WriteTo(w io.Writer) (int64, error) {
+	if _, ok := idx.occ.(*waveletOcc); ok {
+		return idx.writeToV2(w)
+	}
+	return idx.writeToV1(w)
+}
+
+// writeToV1 writes the FMIDX01 (bitvector) format.
+func (idx *Index) writeToV1(w io.Writer) (int64, error) {
 	cw := &countingWriter{w: w}
 	bw := bufio.NewWriterSize(cw, 1<<20)
 
@@ -456,12 +464,13 @@ func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	// Occ bit-vectors
+	bitvecs := idx.occ.(*bitvecOcc).vecs
 	for i := 0; i < 256; i++ {
-		if idx.occ[i] != nil {
+		if bitvecs[i] != nil {
 			if err := bw.WriteByte(1); err != nil {
 				return 0, err
 			}
-			if _, err := idx.occ[i].WriteTo(bw); err != nil {
+			if _, err := bitvecs[i].WriteTo(bw); err != nil {
 				return 0, err
 			}
 		} else {
@@ -477,18 +486,80 @@ func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 	return cw.n, nil
 }
 
+// writeToV2 writes the FMIDX02 (wavelet tree) format.
+// The occurrence array is NOT written; it is rebuilt from the BWT on load.
+func (idx *Index) writeToV2(w io.Writer) (int64, error) {
+	cw := &countingWriter{w: w}
+	bw := bufio.NewWriterSize(cw, 1<<20)
+
+	if _, err := bw.WriteString(magicV2); err != nil {
+		return 0, err
+	}
+	if err := binary.Write(bw, binary.LittleEndian, int64(idx.n)); err != nil {
+		return 0, err
+	}
+
+	// original text
+	if err := binary.Write(bw, binary.LittleEndian, int64(len(idx.text))); err != nil {
+		return 0, err
+	}
+	if _, err := bw.Write(idx.text); err != nil {
+		return 0, err
+	}
+
+	// BWT
+	if _, err := bw.Write(idx.bwt); err != nil {
+		return 0, err
+	}
+
+	// SA as packed int32
+	saBuf := make([]byte, len(idx.sa)*4)
+	for i, v := range idx.sa {
+		binary.LittleEndian.PutUint32(saBuf[i*4:], uint32(v))
+	}
+	if _, err := bw.Write(saBuf); err != nil {
+		return 0, err
+	}
+
+	// C array (256 × int64)
+	cBuf := make([]byte, 256*8)
+	for i, v := range idx.c {
+		binary.LittleEndian.PutUint64(cBuf[i*8:], uint64(v))
+	}
+	if _, err := bw.Write(cBuf); err != nil {
+		return 0, err
+	}
+
+	// (No occ section – reconstructed from BWT on load.)
+
+	if err := bw.Flush(); err != nil {
+		return cw.n, err
+	}
+	return cw.n, nil
+}
+
 // ReadFrom deserialises an index from r.
+// Both the FMIDX01 (bitvectors) and FMIDX02 (wavelet tree) formats are
+// supported.
 func ReadFrom(r io.Reader) (*Index, error) {
 	br := bufio.NewReaderSize(r, 1<<20)
 
-	hdr := make([]byte, len(magic))
+	hdr := make([]byte, len(magic)) // both magics have the same length
 	if _, err := io.ReadFull(br, hdr); err != nil {
 		return nil, fmt.Errorf("fmindex: read magic: %w", err)
 	}
-	if string(hdr) != magic {
-		return nil, fmt.Errorf("fmindex: bad magic %q (want %q)", hdr, magic)
+	switch string(hdr) {
+	case magic:
+		return readFromV1(br)
+	case magicV2:
+		return readFromV2(br)
+	default:
+		return nil, fmt.Errorf("fmindex: bad magic %q (want %q or %q)", hdr, magic, magicV2)
 	}
+}
 
+// readCommonHeader reads n, text, bwt, sa, and c — fields shared by both formats.
+func readCommonHeader(br *bufio.Reader) (*Index, error) {
 	idx := &Index{}
 
 	var n64 int64
@@ -528,6 +599,17 @@ func ReadFrom(r io.Reader) (*Index, error) {
 		idx.c[i] = int(binary.LittleEndian.Uint64(cBuf[i*8:]))
 	}
 
+	return idx, nil
+}
+
+// readFromV1 reads the FMIDX01 (bitvector) format (magic already consumed).
+func readFromV1(br *bufio.Reader) (*Index, error) {
+	idx, err := readCommonHeader(br)
+	if err != nil {
+		return nil, err
+	}
+
+	occ := &bitvecOcc{}
 	for i := 0; i < 256; i++ {
 		present, err := br.ReadByte()
 		if err != nil {
@@ -538,8 +620,20 @@ func ReadFrom(r io.Reader) (*Index, error) {
 			if err != nil {
 				return nil, fmt.Errorf("fmindex: read occ[%d]: %w", i, err)
 			}
-			idx.occ[i] = bv
+			occ.vecs[i] = bv
 		}
 	}
+	idx.occ = occ
+	return idx, nil
+}
+
+// readFromV2 reads the FMIDX02 (wavelet tree) format (magic already consumed).
+// The occurrence array is reconstructed from the stored BWT.
+func readFromV2(br *bufio.Reader) (*Index, error) {
+	idx, err := readCommonHeader(br)
+	if err != nil {
+		return nil, err
+	}
+	idx.occ = buildOcc(idx.bwt, OccWaveletTree)
 	return idx, nil
 }

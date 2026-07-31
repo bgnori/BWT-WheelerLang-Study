@@ -108,3 +108,14 @@ func ExampleBuild_japanese() {
 	// 2
 	// 0
 }
+
+// ExampleBuildWithOptions demonstrates building an FM-index with an explicit
+// suffix-array algorithm and a Wavelet Tree occurrence array.
+func ExampleBuildWithOptions() {
+	idx := BuildWithOptions([]byte("abracadabra"), AlgorithmSAIS, OccWaveletTree)
+	fmt.Println(idx.Count([]byte("abra")))
+	fmt.Println(idx.Count([]byte("xyz")))
+	// Output:
+	// 2
+	// 0
+}
