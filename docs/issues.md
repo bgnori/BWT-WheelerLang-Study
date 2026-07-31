@@ -1,0 +1,237 @@
+# 課題一覧 — ライブラリ公開レビューで洗い出した問題点
+
+作成日: 2026-07-31  
+対象: `github.com/bgnori/bwt-wheelerlang-study` の外部ライブラリ化に向けたレビュー
+
+---
+
+## 優先度について
+
+| 優先度 | 説明 |
+|--------|------|
+| 🔴 High | 正確性・安全性に関わる問題。公開前に修正推奨 |
+| 🟡 Medium | API 品質・ユーザー体験に関わる問題 |
+| 🟢 Low | 将来的な検討事項・設計改善 |
+
+---
+
+## #1 — 位置アンカーがサイレントに無視される 🔴
+
+**ファイル:** `internal/starfree/starfree.go`
+
+**問題:**  
+`evalRegex` では `OpBeginText`、`OpEndText`、`OpBeginLine`、`OpEndLine`、`OpWordBoundary`、`OpNoWordBoundary` を「全区間を返す（≒ マッチしない条件を無視）」として処理しています。
+
+そのため `^hello` を検索すると `hello` と同じ全マッチが返り、ユーザーが意図しない結果になります。
+
+**再現:**
+```go
+idx := bwtsearch.Build([]byte("hello\nworld\nhello"))
+res, _ := bwtsearch.Search(idx, "^hello", 0)
+// 期待: 行頭の hello のみ
+// 実際: hello の全出現 (2件) が返る
+```
+
+**対処案:**
+- アンカーを含むパターンに対して `ViolationError`（または新しい `UnsupportedError`）を返す
+- 少なくとも `docs/library_api.md` に「位置アンカーは FM-index の後方検索モデルでは表現できないため無視される」と明記する
+
+---
+
+## #2 — `BuildFromFiles` のセパレータに `0x00` を渡してもエラーにならない 🔴
+
+**ファイル:** `api.go`
+
+**問題:**  
+ドキュメントには「セパレータに `0x00` を含めてはならない（FM-index の番兵として予約済み）」と記載されているが、実行時チェックがない。
+
+`BuildFromFiles(texts, []byte{0})` を呼び出すと、インデックスが壊れ、以後の検索結果が不正確になる可能性があります。
+
+**対処案:**
+```go
+for _, b := range separator {
+    if b == 0 {
+        panic("bwtsearch: separator must not contain 0x00 (reserved as sentinel)")
+    }
+}
+```
+または `error` を返すシグネチャに変更する（破壊的変更になるため `v2` 以降）。
+
+---
+
+## #3 — `*Index` メソッド群の nil チェックが非一貫 🔴
+
+**ファイル:** `api.go`
+
+**問題:**  
+`WriteTo` と `Search`（公開 API 側）は `idx == nil || idx.inner == nil` をチェックするが、  
+`Count`、`Locate`、`TextLen`、`SALen`、`SAAt`、`AlphabetSize`、`BWT` は nil チェックなしで panic します。
+
+```go
+var idx *bwtsearch.Index
+idx.Count([]byte("abc"))  // → panic: runtime error: nil pointer dereference
+```
+
+**対処案:**  
+以下のいずれかに統一する：
+1. ゼロ値 `*Index` に対してはゼロ値を返す（`Count` → 0、`Locate` → nil、`BWT` → nil など）
+2. panic を "documented behavior" として godoc に明記する
+
+---
+
+## #4 — Unicode 文字クラスがエラーなく 0 件になる 🟡
+
+**ファイル:** `internal/starfree/starfree.go`
+
+**問題:**  
+`evalCharClass` と `evalAnyChar` は ASCII 範囲 (0–127) のルーンのみを処理し、128 以上のルーンを無視します。
+
+そのため `[ぁ-ん]` や `[α-ω]` を検索するとエラーなしに 0 件が返り、利用者が混乱する可能性があります。
+
+```go
+idx := bwtsearch.Build([]byte("ひらがなてきすと"))
+res, err := bwtsearch.Search(idx, "[あ-を]", 0)
+// err == nil, res.TotalCount == 0  ← 正しいが理由が不明
+```
+
+**対処案:**  
+- Unicode 範囲（rune > 127）を含む文字クラスに対して `UnsupportedError` を返す
+- または `docs/library_api.md` に「文字クラスは ASCII (U+0000–U+007F) のみ対応」と明記する
+
+---
+
+## #5 — `Search` が正規表現を 2 回パースしている 🟡
+
+**ファイル:** `internal/starfree/starfree.go`
+
+**問題:**  
+`Search` の内部で `Check(pattern)` → `syntax.Parse #1` を呼び、  
+次に `syntax.Parse(pattern)` を直接呼ぶ（#2）という二重パースが発生しています。
+
+頻繁に検索が発生するユースケースでは余分な解析コストがかかります。
+
+```go
+func Search(idx *fmindex.Index, pattern string, limit int) (*SearchResult, error) {
+    if err := Check(pattern); err != nil {  // ← syntax.Parse #1
+        return nil, err
+    }
+    re, err := syntax.Parse(pattern, syntax.Perl)  // ← syntax.Parse #2
+    ...
+}
+```
+
+**対処案:**  
+内部ヘルパー `parseAndCheck(pattern) (*syntax.Regexp, error)` を導入して一度だけパースする。
+
+---
+
+## #6 — `Build(nil)` の動作が未テスト・未文書化 🟡
+
+**ファイル:** `api.go`, `api_test.go`
+
+**問題:**  
+`Build(nil)` は有効なインデックス（番兵のみ）を返すが、これが意図的な仕様かどうか godoc に記載がない。  
+また `Count`、`Search`、`SALen` などがどのような値を返すかを検証するテストが存在しない。
+
+**対処案:**
+1. `Build` の godoc に「nil または空のスライスを渡すと番兵のみのインデックスを返す」と追記する
+2. `Build(nil)` と `Build([]byte{})` の動作を検証するテストを追加する
+
+---
+
+## #7 — CI/CD ワークフローが存在しない 🔴
+
+**問題:**  
+`.github/workflows/` ディレクトリがなく、プッシュや PR ごとにテストが自動実行されない。  
+外部ライブラリとして公開するにあたり、常に `go test -race ./...` が通ることを保証する仕組みが必要です。
+
+**対処案:**  
+`.github/workflows/ci.yml` を追加する：
+
+```yaml
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - run: go vet ./...
+      - run: go test -race ./...
+```
+
+---
+
+## #8 — セマンティックバージョンタグがない 🔴
+
+**問題:**  
+`git tag` がなく、`go get github.com/bgnori/bwt-wheelerlang-study@latest` が機能しない。  
+また `pkg.go.dev` へのインデックス登録も初回タグが必要です。
+
+**対処案:**
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+その後 `https://pkg.go.dev/github.com/bgnori/bwt-wheelerlang-study` を開くか、  
+`GOPROXY=https://proxy.golang.org go get github.com/bgnori/bwt-wheelerlang-study@v0.1.0`  
+を実行して Go プロキシにインデックス登録を促す。
+
+---
+
+## #9 — TUI 依存関係がライブラリ利用者の `go.mod` に現れる 🟢
+
+**ファイル:** `go.mod`
+
+**問題:**  
+`go.mod` の direct 依存に `github.com/charmbracelet/bubbletea`、`github.com/charmbracelet/bubbles` が含まれる。  
+これらは `cmd/bwtsearch` のみが使用するが、ライブラリとして `go get` した利用者の `go mod tidy` 出力に余分な依存が現れる可能性があります。
+
+**対処案（将来的な検討）:**  
+`cmd/bwtsearch` を独立したモジュール（`cmd/bwtsearch/go.mod`）に切り出す、  
+または `go.work` ワークスペースを使う構成に移行する。  
+現状のメリット（単一リポジトリでの開発のしやすさ）と天秤にかけて判断すること。
+
+---
+
+## #10 — モジュールパスに "study" が含まれており外部ライブラリ名として不適切 🟢
+
+**ファイル:** `go.mod`, `README.md`
+
+**問題:**  
+モジュールパス `github.com/bgnori/bwt-wheelerlang-study` には元々の「勉強用」という文脈の名称が含まれている。  
+外部ライブラリとして広く公開する場合、利用者が長いパスを記述する必要があり、見た目が不自然です。
+
+**候補:**
+
+| 候補 | モジュールパス | 特徴 |
+|------|----------------|------|
+| `go-fmindex` | `github.com/bgnori/go-fmindex` | 汎用的・発見しやすい |
+| `bwtsearch` | `github.com/bgnori/bwtsearch` | 既存のパッケージ名・バイナリ名と一致 |
+| `go-starfree` | `github.com/bgnori/go-starfree` | 差別化特徴（星なし正規表現）を強調 |
+| `fmsearch` | `github.com/bgnori/fmsearch` | 短く実用的 |
+| `wheelerindex` | `github.com/bgnori/wheelerindex` | Wheeler グラフとの理論的つながりを強調 |
+
+**注意:**  
+モジュールパスの変更は後方互換性を破壊するため、`v1.0.0` タグを打つ前（現時点）に実施するのが最善です。
+
+---
+
+## 対応状況まとめ
+
+| # | タイトル | 優先度 | 状態 |
+|---|----------|--------|------|
+| 1 | 位置アンカーがサイレントに無視される | 🔴 High | 未対応 |
+| 2 | `BuildFromFiles` のセパレータ検証なし | 🔴 High | 未対応 |
+| 3 | `*Index` メソッドの nil チェック非一貫 | 🔴 High | 未対応 |
+| 4 | Unicode 文字クラスがエラーなく 0 件になる | 🟡 Medium | 未対応 |
+| 5 | `Search` が正規表現を 2 回パース | 🟡 Medium | 未対応 |
+| 6 | `Build(nil)` が未テスト・未文書化 | 🟡 Medium | 未対応 |
+| 7 | CI/CD ワークフローがない | 🔴 High | 未対応 |
+| 8 | セマンティックバージョンタグがない | 🔴 High | 未対応 |
+| 9 | TUI 依存が利用者の `go.mod` に現れる | 🟢 Low | 未対応 |
+| 10 | モジュールパスに "study" が含まれる | 🟢 Low | 未対応 |
