@@ -29,6 +29,23 @@ func (e *ViolationError) Error() string {
 	)
 }
 
+// UnsupportedError is returned by Check and Search when the pattern contains a
+// regex construct that this FM-index matcher does not support (for example,
+// position anchors).
+type UnsupportedError struct {
+	// Op is a human-readable name of the unsupported operator.
+	Op string
+	// SubExpr is the string form of the offending sub-expression.
+	SubExpr string
+}
+
+func (e *UnsupportedError) Error() string {
+	return fmt.Sprintf(
+		"unsupported regex construct: %q uses %s, which cannot be evaluated by FM-index backward search",
+		e.SubExpr, e.Op,
+	)
+}
+
 // SuffixArrayAlgorithm selects the suffix-array construction algorithm.
 type SuffixArrayAlgorithm int
 
@@ -182,7 +199,8 @@ func (idx *Index) WheelerGraphMermaid(maxNodes int) string {
 
 // Check validates that pattern is a star-free regular expression.
 // It returns a *ViolationError if the pattern contains Kleene star, one-or-more,
-// or an unbounded repetition, or a wrapped error for invalid syntax.
+// or an unbounded repetition; a *UnsupportedError for unsupported constructs
+// such as anchors; or a wrapped error for invalid syntax.
 func Check(pattern string) error {
 	err := starfree.Check(pattern)
 	if err == nil {
@@ -192,11 +210,16 @@ func Check(pattern string) error {
 	if errors.As(err, &sv) {
 		return &ViolationError{Op: sv.Op, SubExpr: sv.SubExpr}
 	}
+	var su *starfree.UnsupportedError
+	if errors.As(err, &su) {
+		return &UnsupportedError{Op: su.Op, SubExpr: su.SubExpr}
+	}
 	return err
 }
 
 // Search runs a star-free regex search over idx.
-// It returns a *ViolationError if pattern violates the star-free constraint.
+// It returns a *ViolationError if pattern violates the star-free constraint, or
+// a *UnsupportedError for unsupported regex constructs.
 func Search(idx *Index, pattern string, limit int) (*SearchResult, error) {
 	if idx == nil || idx.inner == nil {
 		return nil, fmt.Errorf("nil index")
@@ -207,6 +230,10 @@ func Search(idx *Index, pattern string, limit int) (*SearchResult, error) {
 		var sv *starfree.ViolationError
 		if errors.As(err, &sv) {
 			return nil, &ViolationError{Op: sv.Op, SubExpr: sv.SubExpr}
+		}
+		var su *starfree.UnsupportedError
+		if errors.As(err, &su) {
+			return nil, &UnsupportedError{Op: su.Op, SubExpr: su.SubExpr}
 		}
 		return nil, err
 	}

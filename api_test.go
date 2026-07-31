@@ -2,6 +2,7 @@ package bwtsearch
 
 import (
 	"bytes"
+	"errors"
 	"sort"
 	"testing"
 )
@@ -50,6 +51,29 @@ func TestPublicBuildSearchAndPersistence(t *testing.T) {
 func TestPublicCheckRejectsKleeneStar(t *testing.T) {
 	if err := Check("ab*"); err == nil {
 		t.Fatal("expected violation error for Kleene star")
+	}
+}
+
+func TestPublicCheckRejectsUnsupportedAnchors(t *testing.T) {
+	err := Check("^abra")
+	if err == nil {
+		t.Fatal("expected unsupported error for anchor")
+	}
+	var ue *UnsupportedError
+	if !errors.As(err, &ue) {
+		t.Fatalf("error type = %T, want *UnsupportedError", err)
+	}
+}
+
+func TestPublicSearchRejectsUnsupportedAnchors(t *testing.T) {
+	idx := Build([]byte("hello\nworld\nhello"))
+	_, err := Search(idx, "^hello", 0)
+	if err == nil {
+		t.Fatal("expected unsupported error for anchor")
+	}
+	var ue *UnsupportedError
+	if !errors.As(err, &ue) {
+		t.Fatalf("error type = %T, want *UnsupportedError", err)
 	}
 }
 

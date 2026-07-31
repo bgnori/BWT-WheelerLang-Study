@@ -50,9 +50,25 @@ func (e *ViolationError) Error() string {
 	)
 }
 
+// UnsupportedError describes a regex construct that is valid syntax but not
+// supported by this FM-index based matcher.
+type UnsupportedError struct {
+	Op      string // human-readable name of the unsupported operator
+	SubExpr string // string form of the offending sub-expression
+}
+
+func (e *UnsupportedError) Error() string {
+	return fmt.Sprintf(
+		"unsupported regex construct: %q uses %s, which cannot be evaluated by FM-index backward search",
+		e.SubExpr, e.Op,
+	)
+}
+
 // Check returns nil when pattern is a valid star-free regular expression.
 // It returns a *ViolationError if the pattern contains Kleene star, one-or-more,
-// or an unbounded repetition; or a wrapped *syntax.Error for invalid syntax.
+// or an unbounded repetition; a *UnsupportedError for constructs that cannot be
+// represented by backward search (such as position anchors); or a wrapped
+// *syntax.Error for invalid syntax.
 func Check(pattern string) error {
 	re, err := syntax.Parse(pattern, syntax.Perl)
 	if err != nil {
@@ -75,6 +91,18 @@ func checkNode(re *syntax.Regexp) error {
 			}
 		}
 		// Bounded {n,m}: finite union of concatenations → star-free.
+	case syntax.OpBeginText:
+		return &UnsupportedError{Op: "begin-text anchor (^)", SubExpr: re.String()}
+	case syntax.OpEndText:
+		return &UnsupportedError{Op: "end-text anchor ($)", SubExpr: re.String()}
+	case syntax.OpBeginLine:
+		return &UnsupportedError{Op: "begin-line anchor", SubExpr: re.String()}
+	case syntax.OpEndLine:
+		return &UnsupportedError{Op: "end-line anchor", SubExpr: re.String()}
+	case syntax.OpWordBoundary:
+		return &UnsupportedError{Op: "word-boundary anchor (\\b)", SubExpr: re.String()}
+	case syntax.OpNoWordBoundary:
+		return &UnsupportedError{Op: "non-word-boundary anchor (\\B)", SubExpr: re.String()}
 	}
 	for _, sub := range re.Sub {
 		if err := checkNode(sub); err != nil {
@@ -125,8 +153,9 @@ func (sr *SearchResult) Positions(idx *fmindex.Index) []int {
 // pattern must be a valid star-free regular expression (see Check).
 // limit controls the maximum number of match positions returned; ≤0 means no limit.
 //
-// Returns a *ViolationError if pattern violates star-free constraints, or a
-// wrapped *syntax.Error for invalid syntax.
+// Returns a *ViolationError if pattern violates star-free constraints, a
+// *UnsupportedError for unsupported regex constructs, or a wrapped *syntax.Error
+// for invalid syntax.
 func Search(idx *fmindex.Index, pattern string, limit int) (*SearchResult, error) {
 	if err := Check(pattern); err != nil {
 		return nil, err
@@ -214,12 +243,12 @@ func evalRegex(idx *fmindex.Index, re *syntax.Regexp, lo, hi int) []Interval {
 	case syntax.OpEmptyMatch:
 		return []Interval{{lo, hi}}
 
-	// Position anchors (^, $, \b, \B) cannot be expressed in the FM-index
-	// backward-search model; treat them as empty matches.
+	// Position anchors (^, $, \b, \B) are rejected by Check and should not reach
+	// evaluation. Fail closed to avoid silent false positives.
 	case syntax.OpBeginText, syntax.OpEndText,
 		syntax.OpBeginLine, syntax.OpEndLine,
 		syntax.OpWordBoundary, syntax.OpNoWordBoundary:
-		return []Interval{{lo, hi}}
+		return nil
 	}
 
 	return nil

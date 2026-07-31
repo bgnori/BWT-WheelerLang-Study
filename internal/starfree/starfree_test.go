@@ -1,6 +1,7 @@
 package starfree
 
 import (
+	"errors"
 	"sort"
 	"testing"
 
@@ -20,11 +21,30 @@ func TestCheckAccepted(t *testing.T) {
 		"colour?", // optional — star-free (a? = a|ε)
 		"(foo|bar)baz",
 		"ab?c",
-		"^hello$", // anchors — star-free (position assertions)
 	}
 	for _, pat := range accepted {
 		if err := Check(pat); err != nil {
 			t.Errorf("Check(%q) returned error, want nil: %v", pat, err)
+		}
+	}
+}
+
+func TestCheckRejectsUnsupportedAnchors(t *testing.T) {
+	rejected := []string{
+		"^hello",
+		"hello$",
+		"\\bword",
+		"word\\B",
+	}
+	for _, pat := range rejected {
+		err := Check(pat)
+		if err == nil {
+			t.Errorf("Check(%q) returned nil, want unsupported error", pat)
+			continue
+		}
+		var ue *UnsupportedError
+		if !errors.As(err, &ue) {
+			t.Errorf("Check(%q) error type = %T, want *UnsupportedError", pat, err)
 		}
 	}
 }
@@ -185,6 +205,18 @@ func TestSearchRejectsUnboundedRepeat(t *testing.T) {
 	_, err := Search(idx, "a{2,}", 0)
 	if err == nil {
 		t.Error("Search with {n,} should return error")
+	}
+}
+
+func TestSearchRejectsUnsupportedAnchors(t *testing.T) {
+	idx := buildIdx("hello\nworld\nhello")
+	_, err := Search(idx, "^hello", 0)
+	if err == nil {
+		t.Fatal("Search with anchor should return error")
+	}
+	var ue *UnsupportedError
+	if !errors.As(err, &ue) {
+		t.Fatalf("error type = %T, want *UnsupportedError", err)
 	}
 }
 
