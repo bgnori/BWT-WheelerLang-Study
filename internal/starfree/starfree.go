@@ -157,12 +157,12 @@ func (sr *SearchResult) Positions(idx *fmindex.Index) []int {
 // *UnsupportedError for unsupported regex constructs, or a wrapped *syntax.Error
 // for invalid syntax.
 func Search(idx *fmindex.Index, pattern string, limit int) (*SearchResult, error) {
-	if err := Check(pattern); err != nil {
-		return nil, err
-	}
 	re, err := syntax.Parse(pattern, syntax.Perl)
 	if err != nil {
 		return nil, fmt.Errorf("invalid regex: %w", err)
+	}
+	if err := checkNode(re); err != nil {
+		return nil, err
 	}
 	re = re.Simplify()
 
