@@ -399,10 +399,23 @@ func buildSuffixArray(text []byte) []int {
 
 const magic = "FMIDX01"
 
+// countingWriter wraps an io.Writer and tracks the total bytes written.
+type countingWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (cw *countingWriter) Write(p []byte) (int, error) {
+	n, err := cw.w.Write(p)
+	cw.n += int64(n)
+	return n, err
+}
+
 // WriteTo serialises the index to w.
 // It implements io.WriterTo.
 func (idx *Index) WriteTo(w io.Writer) (int64, error) {
-	bw := bufio.NewWriterSize(w, 1<<20)
+	cw := &countingWriter{w: w}
+	bw := bufio.NewWriterSize(cw, 1<<20)
 
 	if _, err := bw.WriteString(magic); err != nil {
 		return 0, err
@@ -459,9 +472,9 @@ func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	if err := bw.Flush(); err != nil {
-		return 0, err
+		return cw.n, err
 	}
-	return 0, nil // byte count omitted; callers check the error only
+	return cw.n, nil
 }
 
 // ReadFrom deserialises an index from r.
