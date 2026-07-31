@@ -1,6 +1,8 @@
 {
   "name": "BWT Wheeler Lang Study",
-  "image": "mcr.microsoft.com/devcontainers/go:1-1.21-bookworm",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
   "customizations": {
     "vscode": {
       "settings": {
@@ -12,6 +14,12 @@
       ]
     }
   },
-  "postCreateCommand": "go version",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11",
+      "installTools": true
+    }
+  },
+  "postCreateCommand": "go version && sudo apt-get update && sudo apt-get install -y python3-pip python3-venv && python3 -m pip --version",
   "remoteUser": "vscode"
 }
