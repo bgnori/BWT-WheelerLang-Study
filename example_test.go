@@ -119,3 +119,11 @@ func ExampleBuildWithOptions() {
 	// 2
 	// 0
 }
+
+func ExampleIndex_Append() {
+	idx := Build([]byte("hello"))
+	_ = idx.Append([]byte(" world"))
+	fmt.Println(idx.Count([]byte("hello world")))
+	// Output:
+	// 1
+}
