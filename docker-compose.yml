@@ -39,3 +39,19 @@ services:
              echo 'Downloaded and converted kenshin.txt'"
     volumes:
       - ./data:/data
+
+  # Convenience service that downloads the E. coli K-12 MG1655 genome from NCBI
+  # and converts the FASTA to a plain-text DNA sequence for FM-index testing.
+  download-ecoli:
+    image: alpine:3.19
+    command: >
+      sh -c "apk --no-cache add wget gzip &&
+             mkdir -p /data &&
+             wget -q -O /tmp/ecoli.fna.gz
+               'https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/005/845/GCF_000005845.2_ASM584v2/GCF_000005845.2_ASM584v2_genomic.fna.gz' &&
+             gunzip -c /tmp/ecoli.fna.gz > /data/ecoli.fna &&
+             rm -f /tmp/ecoli.fna.gz &&
+             awk '/^>/{if(seq!=\"\"){print toupper(seq);seq=\"\"};next}{seq=seq $0}END{if(seq!=\"\")print toupper(seq)}' /data/ecoli.fna > /data/ecoli.txt &&
+             echo 'Downloaded and prepared ecoli.txt'"
+    volumes:
+      - ./data:/data

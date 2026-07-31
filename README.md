@@ -326,6 +326,74 @@ docker compose run bwtsearch search /data/kenshin.idx "上杉謙信"
 
 > **注意：** テキストデータおよびインデックスファイル（`data/*.txt`, `data/*.idx`）は `.gitignore` に登録されており、リポジトリにはコミットしないでください。
 
+### E. coli K-12 MG1655（ゲノムデータサンプル）
+
+[NCBI RefSeq NC_000913.3](https://www.ncbi.nlm.nih.gov/nuccore/NC_000913.3) — 大腸菌（*Escherichia coli*）K-12 株 MG1655 の完全ゲノム（約 4.6 Mbp）を使用します。
+データソースは NCBI FTP（Assembly: GCF_000005845.2, ASM584v2）です。
+
+ゲノムデータは **FASTA 形式**（`.fna`）で配布されています。FM-index に取り込む前に、FASTA ヘッダ行（`>` で始まる行）を除去し、塩基配列を大文字化・結合した平文テキスト（`.txt`）に変換する必要があります。
+
+#### ローカル（Go）での手順
+
+```bash
+# 1. FASTA ファイルをダウンロード → data/ecoli.fna
+make download-ecoli
+
+# 2. FASTA を平文 DNA テキストに変換 → data/ecoli.txt
+make prepare-ecoli
+
+# 3. FM-index を構築（大規模入力のため SA-IS を推奨）
+make build-index-ecoli
+
+# 4. サンプル検索
+make search-demo-ecoli
+```
+
+直接スクリプト・CLI で操作する場合:
+
+```bash
+# FASTA ダウンロード
+./scripts/download_ecoli.sh
+
+# FASTA → 平文 DNA 変換
+./scripts/prepare_ecoli.sh
+
+# FM-index 構築
+./bwtsearch build --algo sais data/ecoli.txt data/ecoli.idx
+
+# 検索（例：開始コドン周辺の典型的なパターン）
+./bwtsearch search data/ecoli.idx "ATGAAACGC" --limit 10
+
+# インデックス情報
+./bwtsearch info data/ecoli.idx
+```
+
+#### Docker での手順
+
+```bash
+# イメージをビルド
+docker compose build
+
+# FASTA ダウンロード＆変換（ecoli.fna と ecoli.txt を生成）
+docker compose run download-ecoli
+
+# FM-index を構築
+docker compose run bwtsearch build --algo sais /data/ecoli.txt /data/ecoli.idx
+
+# 検索
+docker compose run bwtsearch search /data/ecoli.idx "ATGAAACGC"
+```
+
+#### ゲノムデータ処理の注意点
+
+- **FASTA 形式**: ヘッダ行（`>`）と塩基配列行が交互に並ぶテキスト形式です。`prepare_ecoli.sh` がヘッダを除去し、各レコードの配列を 1 行に結合して大文字化します。
+- **文字セット**: E. coli ゲノムは A/C/G/T/N（不明塩基）のみで構成されます。すべて ASCII 1 バイトなので FM-index にそのまま取り込めます。
+- **大規模テキスト**: 約 4.6 MB・460 万文字の連続バイト列です。インデックス構築には `--algo sais`（SA-IS アルゴリズム）を推奨します。
+- **ゼロバイト**: FM-index はゼロバイト（0x00）を番兵として使用します。通常の FASTA 塩基配列にゼロバイトは含まれません。
+- **`.fna` ファイル**: ダウンロードされた生 FASTA ファイル（`data/ecoli.fna`）も `.gitignore` で除外されています。コミットしないでください。
+
+> **注意：** FASTA ファイル（`data/*.fna`）・平文テキスト（`data/*.txt`）・インデックス（`data/*.idx`）はすべて `.gitignore` に登録されており、リポジトリにはコミットしないでください。
+
 ### Git LFS について
 
 このリポジトリは **現時点では Git LFS を必須としていません**。大容量になりやすいデータは `data/` 配下に置き、`.gitignore` で管理します。
