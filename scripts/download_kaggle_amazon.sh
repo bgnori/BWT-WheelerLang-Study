@@ -1,9 +1,9 @@
 #!/bin/sh
 # download_kaggle_amazon.sh
-# Downloads Amazon-related datasets from Kaggle for benchmark tiers:
-#   - small:  Amazon Laptop Prices Dataset
-#   - medium: Amazon Mobile Dataset
-#   - large:  Amazon Product Dataset (100K+)
+# Downloads Amazon-related community datasets from Kaggle for benchmark tiers.
+# Kaggle does not provide an official Amazon product dataset source here. The
+# small tier defaults to owm4096/laptop-prices; set KAGGLE_DATASET_SMALL,
+# KAGGLE_DATASET_MEDIUM, or KAGGLE_DATASET_LARGE to choose a different source.
 # The downloaded files must NOT be committed to the repository.
 #
 # Usage:
@@ -25,16 +25,16 @@ fi
 
 case "$SIZE" in
     small)
-        DATASET_NAME="Amazon Laptop Prices Dataset"
-        DATASET_ID="${KAGGLE_DATASET_SMALL:-ionaskel/laptop-prices}"
+        DATASET_NAME="Laptop Prices"
+        DATASET_ID="${KAGGLE_DATASET_SMALL:-owm4096/laptop-prices}"
         ;;
     medium)
-        DATASET_NAME="Amazon Mobile Dataset"
-        DATASET_ID="${KAGGLE_DATASET_MEDIUM:-PromptCloudHQ/amazon-unlocked-mobile}"
+        DATASET_NAME="Amazon medium dataset"
+        DATASET_ID="${KAGGLE_DATASET_MEDIUM:-}"
         ;;
     large)
-        DATASET_NAME="Amazon Product Dataset (100K+)"
-        DATASET_ID="${KAGGLE_DATASET_LARGE:-piyushjain16/amazon-product-dataset}"
+        DATASET_NAME="Amazon large dataset"
+        DATASET_ID="${KAGGLE_DATASET_LARGE:-}"
         ;;
     *)
         echo "Error: invalid size '$SIZE' (use small|medium|large)." >&2
@@ -42,10 +42,28 @@ case "$SIZE" in
         ;;
 esac
 
+if [ -z "$DATASET_ID" ]; then
+    ENV_NAME="KAGGLE_DATASET_$(printf '%s' "$SIZE" | tr '[:lower:]' '[:upper:]')"
+    echo "Error: no Kaggle dataset ID configured for size '$SIZE'." >&2
+    echo "Kaggle Amazon datasets are community-published; choose a source you trust and set $ENV_NAME." >&2
+    echo "Example: $ENV_NAME=owner/dataset-slug make download-amazon-$SIZE" >&2
+    exit 1
+fi
+
 if ! command -v kaggle > /dev/null 2>&1; then
     echo "Error: kaggle command not found." >&2
     echo "Install Kaggle CLI first: pip install kaggle" >&2
     exit 1
+fi
+
+if [ -z "${KAGGLE_USERNAME:-}" ] || [ -z "${KAGGLE_KEY:-}" ]; then
+    if [ ! -f "$HOME/.kaggle/kaggle.json" ] && [ ! -f "$HOME/.kaggle/access_token" ]; then
+        echo "Error: Kaggle credentials not found." >&2
+        echo "Set KAGGLE_USERNAME and KAGGLE_KEY, place kaggle.json at ~/.kaggle/kaggle.json," >&2
+        echo "or authenticate the Kaggle CLI so ~/.kaggle/access_token exists." >&2
+        echo "If the dataset requires terms acceptance, accept it on Kaggle first." >&2
+        exit 1
+    fi
 fi
 
 RAW_DIR="$DATADIR/kaggle/$SIZE/raw"

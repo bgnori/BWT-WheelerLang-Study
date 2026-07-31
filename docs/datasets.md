@@ -66,10 +66,19 @@ make search-demo-osativa-chr1
 
 ## 6. Kaggle Amazon データセット（小/中/大）
 
+Kaggle 上の Amazon 関連データセットはコミュニティ投稿が中心です。small は `owm4096/laptop-prices` を既定値として使いますが、公式データソースではありません。必要に応じて、利用するデータセットを確認したうえで `KAGGLE_DATASET_SMALL` / `KAGGLE_DATASET_MEDIUM` / `KAGGLE_DATASET_LARGE` に明示してください。
+
 前提:
 
 - Kaggle CLI（`pip install kaggle`）
-- `~/.kaggle/kaggle.json` または `KAGGLE_USERNAME` / `KAGGLE_KEY`
+- `~/.kaggle/kaggle.json`、`~/.kaggle/access_token`、または `KAGGLE_USERNAME` / `KAGGLE_KEY`
+
+例:
+
+```bash
+KAGGLE_DATASET_SMALL=owner/dataset-slug make download-amazon-small
+KAGGLE_DATASET_MEDIUM=owner/dataset-slug make download-amazon-medium
+```
 
 ```bash
 # small
@@ -87,8 +96,6 @@ make download-amazon-large
 make prepare-amazon-large
 make build-index-amazon-large
 ```
-
-必要に応じて `KAGGLE_DATASET_SMALL` / `KAGGLE_DATASET_MEDIUM` / `KAGGLE_DATASET_LARGE` でデータセット ID を上書きできます。
 
 ## 7. Fake ログ（flog / mclogs）
 
