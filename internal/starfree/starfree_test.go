@@ -14,7 +14,7 @@ func TestCheckAccepted(t *testing.T) {
 	accepted := []string{
 		"hello",
 		"hello|world",
-		"hel.o",   // . is a character wildcard — star-free
+		"hel.o", // . is a character wildcard — star-free
 		"[abc]at",
 		"a{3}",    // bounded repeat — star-free (finite concatenation)
 		"a{2,5}",  // bounded repeat — star-free (finite union of concatenations)
