@@ -97,9 +97,16 @@ func Build(text []byte) *Index {
 // FM-index over the combined corpus. If separator is nil a newline (\n) is
 // used. The separator must not contain 0x00, which is reserved as the
 // FM-index sentinel.
+//
+// BuildFromFiles panics if separator contains the byte 0x00.
 func BuildFromFiles(texts [][]byte, separator []byte) *Index {
 	if separator == nil {
 		separator = []byte{'\n'}
+	}
+	for _, b := range separator {
+		if b == 0x00 {
+			panic("bwtsearch: separator must not contain 0x00 (reserved as sentinel)")
+		}
 	}
 	if len(texts) == 0 {
 		return Build(nil)

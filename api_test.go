@@ -77,6 +77,26 @@ func TestPublicSearchRejectsUnsupportedAnchors(t *testing.T) {
 	}
 }
 
+func TestBuildFromFilesPanicsOnNullSeparator(t *testing.T) {
+	texts := [][]byte{[]byte("hello"), []byte("world")}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for separator containing 0x00")
+		}
+	}()
+	BuildFromFiles(texts, []byte{0x00})
+}
+
+func TestBuildFromFilesPanicsOnSeparatorWithEmbeddedNull(t *testing.T) {
+	texts := [][]byte{[]byte("hello"), []byte("world")}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for separator containing 0x00")
+		}
+	}()
+	BuildFromFiles(texts, []byte{'-', 0x00, '-'})
+}
+
 func TestNilIndexErrors(t *testing.T) {
 	if _, err := Search(nil, "abra", 0); err == nil {
 		t.Fatal("expected error for nil index")
