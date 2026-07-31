@@ -1,6 +1,7 @@
 # 課題一覧 — ライブラリ公開レビューで洗い出した問題点
 
 作成日: 2026-07-31  
+最終更新: 2026-07-31  
 対象: `github.com/bgnori/bwt-wheelerlang-study` の外部ライブラリ化に向けたレビュー
 
 ---
@@ -118,7 +119,7 @@ res, err := bwtsearch.Search(idx, "[あ-を]", 0)
 
 ---
 
-## #5 — `Search` が正規表現を 2 回パースしている 🟡 ✅ 対応済み
+## #5 — `Search` が正規表現を 2 回パースしていた 🟡 ✅ 対応済み
 
 **ファイル:** `internal/starfree/starfree.go`
 
@@ -239,6 +240,66 @@ git push origin v0.1.0
 
 ---
 
+## #11 — `BuildStdlibFromFiles` のセパレータに `0x00` を渡してもエラーにならない 🔴
+
+**ファイル:** `stdlib_index.go`
+
+**問題:**  
+`BuildFromFiles`・`BuildBiFromFiles` には 0x00 バイトの検証ループが追加されているが、
+`BuildStdlibFromFiles` には同様のチェックが存在しない。
+
+```go
+// BuildStdlibFromFiles — セパレータに 0x00 を渡してもそのままテキストに連結される
+BuildStdlibFromFiles(texts, []byte{0})  // ← panic しない / エラーにならない
+```
+
+StdlibIndex は Go 標準ライブラリの `suffixarray.Index` を使用するため FM-index の番兵問題は
+直接は発生しないが、0x00 バイトが混入したテキストで構築されたインデックスは
+検索結果が予測困難になり、ドキュメントとの一貫性が損なわれる。
+
+**対処案:**  
+`BuildFromFiles` と同様に 0x00 チェックを追加し、含まれる場合は panic する。
+
+```go
+for _, b := range separator {
+    if b == 0x00 {
+        panic("bwtsearch: separator must not contain 0x00")
+    }
+}
+```
+
+または、StdlibIndex はバイト 0x00 を特別扱いしない旨を godoc に明記する。
+
+---
+
+## #12 — `BiIndex` / `StdlibIndex` のメソッドに nil レシーバーチェックがない 🔴
+
+**ファイル:** `biindex.go`, `stdlib_index.go`
+
+**問題:**  
+`Index` の `Search`・`Append`・`WriteTo` には nil チェックが追加されているが（Issue #3 の部分対応）、
+`BiIndex` と `StdlibIndex` の全メソッドには nil レシーバーチェックが存在しない。
+
+```go
+var idx *bwtsearch.BiIndex
+idx.Count([]byte("abc"))         // → panic: nil pointer dereference
+idx.WriteTo(os.Stdout)           // → panic: nil pointer dereference
+
+var sidx *bwtsearch.StdlibIndex
+sidx.Count([]byte("abc"))        // → panic: nil pointer dereference
+```
+
+Issue #3 と同根の問題だが、`BiIndex`・`StdlibIndex` は別ファイルで管理されているため
+別 Issue として追跡する。
+
+**対処案:**  
+Issue #3 と同様に、以下のいずれかで統一する：
+1. ゼロ値レシーバーに対してゼロ値を返す（`Count` → 0、`Locate` → nil など）
+2. panic を "documented behavior" として godoc に明記する
+3. `WriteTo` / `Save` には少なくともエラーを返す（破壊的変更なし）
+
+---
+
 ## 対応状況まとめ
 
 | # | タイトル | 優先度 | 状態 |
@@ -247,9 +308,11 @@ git push origin v0.1.0
 | 2 | `BuildFromFiles` のセパレータ検証なし | 🔴 High | ✅ 対応済み |
 | 3 | `*Index` メソッドの nil チェック非一貫 | 🔴 High | 🔸 `Search`/`Append`/`WriteTo` は対応済み、`Count`/`Locate` 等は未対応 |
 | 4 | Unicode 文字クラスがエラーなく 0 件になる | 🟡 Medium | 🔸 ドキュメントに制限事項を記載済み（`UnsupportedError` 未対応） |
-| 5 | `Search` が正規表現を 2 回パース | 🟡 Medium | 未対応 |
+| 5 | `Search` が正規表現を 2 回パース | 🟡 Medium | ✅ 対応済み |
 | 6 | `Build(nil)` が未テスト・未文書化 | 🟡 Medium | 未対応 |
 | 7 | CI/CD ワークフローがない | 🔴 High | 未対応 |
 | 8 | セマンティックバージョンタグがない | 🔴 High | 未対応 |
 | 9 | TUI 依存が利用者の `go.mod` に現れる | 🟢 Low | 未対応 |
 | 10 | モジュールパスに "study" が含まれる | 🟢 Low | 未対応 |
+| 11 | `BuildStdlibFromFiles` の 0x00 セパレータ検証なし | 🔴 High | 未対応 |
+| 12 | `BiIndex`/`StdlibIndex` のメソッドに nil レシーバーチェックなし | 🔴 High | 未対応 |
