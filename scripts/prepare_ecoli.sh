@@ -4,11 +4,13 @@
 # indexing. Strips header lines (lines starting with '>'), joins the sequence
 # lines within each record into one continuous line, and uppercases all bases.
 #
-# Usage:  ./scripts/prepare_ecoli.sh [data-dir]
+# Usage:  ./scripts/prepare_ecoli.sh [data-dir] [input-fasta-file] [output-text-file]
 #   data-dir defaults to ./data
+#   input-fasta-file defaults to ecoli.fna
+#   output-text-file defaults to ecoli.txt
 #
-# Input:  <data-dir>/ecoli.fna  (FASTA; download first with download_ecoli.sh)
-# Output: <data-dir>/ecoli.txt  (plain-text DNA sequence, uppercase)
+# Input:  <data-dir>/<input-fasta-file>  (FASTA)
+# Output: <data-dir>/<output-text-file>  (plain-text DNA sequence, uppercase)
 #
 # Notes:
 # - FASTA header lines ('>...') are removed; only sequence data is kept.
@@ -22,12 +24,14 @@
 set -e
 
 DATADIR="${1:-./data}"
-INFILE="$DATADIR/ecoli.fna"
-OUTFILE="$DATADIR/ecoli.txt"
+INPUT_FASTA="${2:-ecoli.fna}"
+OUTPUT_TEXT="${3:-ecoli.txt}"
+INFILE="$DATADIR/$INPUT_FASTA"
+OUTFILE="$DATADIR/$OUTPUT_TEXT"
 
 if [ ! -f "$INFILE" ]; then
     echo "Error: FASTA file not found: $INFILE" >&2
-    echo "Run ./scripts/download_ecoli.sh first." >&2
+    echo "Download the FASTA file first." >&2
     exit 1
 fi
 

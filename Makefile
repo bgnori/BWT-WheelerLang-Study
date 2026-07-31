@@ -1,4 +1,4 @@
-.PHONY: all build test lint clean download-testdata download-kenshin download-git download-ecoli prepare-ecoli docker-build docker-run
+.PHONY: all build test lint clean download-testdata download-kenshin download-git download-ecoli prepare-ecoli download-osativa-chr1 prepare-osativa-chr1 docker-build docker-run
 
 BINARY  := bwtsearch
 DATADIR := data
@@ -7,6 +7,7 @@ KENSHIN_INDEXFILE := $(DATADIR)/kenshin.idx
 GIT_SRC_DIR := $(DATADIR)/git-src
 GIT_INDEXFILE := $(DATADIR)/git.idx
 ECOLI_INDEXFILE := $(DATADIR)/ecoli.idx
+OSATIVA_CHR1_INDEXFILE := $(DATADIR)/osativa_chr1.idx
 
 all: build
 
@@ -89,6 +90,15 @@ download-ecoli:
 prepare-ecoli: $(DATADIR)/ecoli.fna
 	./scripts/prepare_ecoli.sh $(DATADIR)
 
+## download-osativa-chr1: download Oryza sativa chromosome 1 FASTA from NCBI (not committed)
+download-osativa-chr1:
+	@mkdir -p $(DATADIR)
+	./scripts/download_osativa_chr1.sh $(DATADIR)
+
+## prepare-osativa-chr1: convert Oryza sativa chromosome 1 FASTA to plain-text DNA (not committed)
+prepare-osativa-chr1: $(DATADIR)/osativa_chr1.fna
+	./scripts/prepare_ecoli.sh $(DATADIR) osativa_chr1.fna osativa_chr1.txt
+
 ## build-index-git: build the FM-index from the Git source files
 build-index-git: $(GIT_SRC_DIR)
 	find $(GIT_SRC_DIR) -type f \( -name "*.c" -o -name "*.h" \) | sort | \
@@ -116,6 +126,14 @@ search-demo-ecoli: $(ECOLI_INDEXFILE)
 suffixarray-demo-ecoli: $(DATADIR)/ecoli.txt
 	./$(BINARY) build --algo suffixarray $(DATADIR)/ecoli.txt $(DATADIR)/ecoli.saidx
 	./$(BINARY) search --limit 10 $(DATADIR)/ecoli.saidx "ATGAAACGC"
+
+## build-index-osativa-chr1: build FM-index from Oryza sativa chr1 genome text
+build-index-osativa-chr1: $(DATADIR)/osativa_chr1.txt
+	./$(BINARY) build --algo sais $(DATADIR)/osativa_chr1.txt $(OSATIVA_CHR1_INDEXFILE)
+
+## search-demo-osativa-chr1: run a sample search on the Oryza sativa chr1 genome index
+search-demo-osativa-chr1: $(OSATIVA_CHR1_INDEXFILE)
+	./$(BINARY) search --limit 10 $(OSATIVA_CHR1_INDEXFILE) "ATGGCG"
 
 help:
 	@grep -E '^## ' Makefile | sed 's/## /  /'

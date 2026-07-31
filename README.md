@@ -326,12 +326,13 @@ docker compose run bwtsearch search /data/kenshin.idx "上杉謙信"
 
 > **注意：** テキストデータおよびインデックスファイル（`data/*.txt`, `data/*.idx`）は `.gitignore` に登録されており、リポジトリにはコミットしないでください。
 
-### E. coli K-12 MG1655（ゲノムデータサンプル）
+### E. coli K-12 MG1655 / イネ第1染色体（ゲノムデータサンプル）
 
 [NCBI RefSeq NC_000913.3](https://www.ncbi.nlm.nih.gov/nuccore/NC_000913.3) — 大腸菌（*Escherichia coli*）K-12 株 MG1655 の完全ゲノム（約 4.6 Mbp）を使用します。
 データソースは NCBI FTP（Assembly: GCF_000005845.2, ASM584v2）です。
 
 ゲノムデータは **FASTA 形式**（`.fna`）で配布されています。FM-index に取り込む前に、FASTA ヘッダ行（`>` で始まる行）を除去し、塩基配列を大文字化・結合した平文テキスト（`.txt`）に変換する必要があります。
+この前処理は `prepare_ecoli.sh` を使い回しでき、入力/出力ファイル名を切り替えるだけで他の FASTA にも適用できます。
 
 #### ローカル（Go）での手順
 
@@ -368,6 +369,34 @@ make search-demo-ecoli
 ./bwtsearch info data/ecoli.idx
 ```
 
+### Oryza sativa（イネ）第1染色体
+
+[NCBI GenBank Assembly GCA_001433935.1 (IRGSP-1.0)](https://www.ncbi.nlm.nih.gov/datasets/genome/GCA_001433935.1/) の第1染色体 FASTA（約 43.3MB〜45MB）を使用できます。
+
+```bash
+# 1. FASTA ファイルをダウンロード → data/osativa_chr1.fna
+make download-osativa-chr1
+
+# 2. FASTA を平文 DNA テキストに変換（既存スクリプトを再利用）→ data/osativa_chr1.txt
+make prepare-osativa-chr1
+
+# 3. FM-index を構築（大規模入力のため SA-IS を推奨）
+make build-index-osativa-chr1
+
+# 4. サンプル検索
+make search-demo-osativa-chr1
+```
+
+直接スクリプト・CLI で操作する場合:
+
+```bash
+./scripts/download_osativa_chr1.sh
+./scripts/prepare_ecoli.sh ./data osativa_chr1.fna osativa_chr1.txt
+./bwtsearch build --algo sais data/osativa_chr1.txt data/osativa_chr1.idx
+./bwtsearch search data/osativa_chr1.idx "ATGGCG" --limit 10
+./bwtsearch info data/osativa_chr1.idx
+```
+
 #### Docker での手順
 
 ```bash
@@ -382,6 +411,12 @@ docker compose run bwtsearch build --algo sais /data/ecoli.txt /data/ecoli.idx
 
 # 検索
 docker compose run bwtsearch search /data/ecoli.idx "ATGAAACGC"
+
+# イネ第1染色体の FASTA ダウンロード＆変換（osativa_chr1.fna と osativa_chr1.txt を生成）
+docker compose run download-osativa-chr1
+
+# イネ第1染色体インデックスを構築
+docker compose run bwtsearch build --algo sais /data/osativa_chr1.txt /data/osativa_chr1.idx
 ```
 
 #### ゲノムデータ処理の注意点
@@ -389,6 +424,7 @@ docker compose run bwtsearch search /data/ecoli.idx "ATGAAACGC"
 - **FASTA 形式**: ヘッダ行（`>`）と塩基配列行が交互に並ぶテキスト形式です。`prepare_ecoli.sh` がヘッダを除去し、各レコードの配列を 1 行に結合して大文字化します。
 - **文字セット**: E. coli ゲノムは A/C/G/T/N（不明塩基）のみで構成されます。すべて ASCII 1 バイトなので FM-index にそのまま取り込めます。
 - **大規模テキスト**: 約 4.6 MB・460 万文字の連続バイト列です。インデックス構築には `--algo sais`（SA-IS アルゴリズム）を推奨します。
+- **植物ゲノムの反復配列**: イネを含む植物ゲノムは反復配列が多く、BWT ラン分布や検索ヒット分布が偏りやすいため、インデックス生成時間・メモリ使用量・検索時の候補数に影響が出やすい点に注意してください。
 - **ゼロバイト**: FM-index はゼロバイト（0x00）を番兵として使用します。通常の FASTA 塩基配列にゼロバイトは含まれません。
 - **`.fna` ファイル**: ダウンロードされた生 FASTA ファイル（`data/ecoli.fna`）も `.gitignore` で除外されています。コミットしないでください。
 
