@@ -1,6 +1,6 @@
 # BWT-WheelerLang-Study
 
-全文検索アルゴリズムの理解と評価：FM-index（Wheeler グラフ）の実装と Go 標準ライブラリ `index/suffixarray` との機能比較。
+全文検索アルゴリズムの理解と評価：FM-index（Wheeler グラフ）の実装と Go 標準ライブラリ `index/suffixarray` を統一インターフェースで選択・比較。
 
 ## 概要
 
@@ -10,7 +10,7 @@
 - **ビットベクトルインデックス**：ランク演算（Rank1/Rank0）を O(1) でサポートする簡潔データ構造で、FM-index の Occ 配列を実現します。
 - **星なし正規表現検索**：Kleene スターを含まない正規表現（星なし言語）によるパターン検索。制限を超えるクエリにはエラーメッセージを返します。
 - **インデックスの永続化**：インデックスをバイナリファイルに保存・読み込みする機能。
-- **標準ライブラリとの比較**：Go の `index/suffixarray` と件数・速度を比較する `compare` コマンド。
+- **標準ライブラリの Suffix Array**：`--algo suffixarray` オプションで Go の `index/suffixarray` バックエンドを選択できます。FM-index と同一の CLI インターフェースで使用でき、リテラル文字列検索に対応します（正規表現クエリは非対応）。
 
 ## ライブラリとして使う
 
@@ -25,10 +25,12 @@ import bwtsearch "github.com/bgnori/bwt-wheelerlang-study"
 - `bwtsearch.Build`, `bwtsearch.BuildWithAlgorithm`, `bwtsearch.BuildWithOptions`, `bwtsearch.BuildFromFiles`
 - `bwtsearch.Load`, `bwtsearch.ReadFrom`
 - `(*bwtsearch.Index).Save`, `(*bwtsearch.Index).WriteTo`, `(*bwtsearch.Index).Append`, `(*bwtsearch.Index).Count`, `(*bwtsearch.Index).Locate`
+- `bwtsearch.BuildStdlib`, `bwtsearch.BuildStdlibFromFiles`
+- `(*bwtsearch.StdlibIndex).Save`, `(*bwtsearch.StdlibIndex).WriteTo`, `(*bwtsearch.StdlibIndex).Count`, `(*bwtsearch.StdlibIndex).Locate`
+- `bwtsearch.LoadStdlib`, `bwtsearch.ReadStdlibFrom`
 - `bwtsearch.Check`, `bwtsearch.Search`（星なし正規表現検索）
-- エラー型: `bwtsearch.ViolationError`（星なし制約違反）、`bwtsearch.UnsupportedError`（非対応構文）
 
-詳細は `docs/library_api.md` を参照してください。
+- エラー型: `bwtsearch.ViolationError`（星なし制約違反）、`bwtsearch.UnsupportedError`（非対応構文）
 
 ---
 
@@ -85,9 +87,6 @@ make build-index
 
 # サンプル検索
 make search-demo
-
-# FM-index vs 標準ライブラリの比較
-make compare-demo
 ```
 
 ---
@@ -97,14 +96,15 @@ make compare-demo
 ### `build` — インデックス構築
 
 ```
-bwtsearch build [--algo doubling|sais] [--occ bitvectors|wavelet] <input-file> <index-file>
+bwtsearch build [--algo doubling|sais|suffixarray] [--occ bitvectors|wavelet] <input-file> <index-file>
 ```
 
-テキストファイルから FM-index を構築し、バイナリ形式でファイルに保存します。
+テキストファイルからインデックスを構築し、バイナリ形式でファイルに保存します。
 
 - `--algo`: 接尾辞配列の構築アルゴリズム（既定値 `doubling`）
-  - `doubling`: 前置倍加法（Manber-Myers）。シンプルで安定。
-  - `sais`: SA-IS アルゴリズム。大規模テキストで高速。
+  - `doubling`: 前置倍加法（Manber-Myers）。シンプルで安定。FM-index を構築します。
+  - `sais`: SA-IS アルゴリズム。大規模テキストで高速。FM-index を構築します。
+  - `suffixarray`: Go 標準ライブラリ `index/suffixarray` を使用。リテラル検索専用。正規表現クエリは非対応。
 - `--occ`: Occ 配列の実装（既定値 `bitvectors`）
   - `bitvectors`: 文字ごとの簡潔ビットベクトル。アルファベットが小さい場合に有利。
   - `wavelet`: ウェーブレット木。アルファベットが大きい（バイト値の種類が多い）テキストで有利。
@@ -120,12 +120,15 @@ bwtsearch build --algo sais data/moby_dick.txt data/moby_dick.idx
 
 # SA-IS + ウェーブレット木を使用
 bwtsearch build --algo sais --occ wavelet data/moby_dick.txt data/moby_dick.idx
+
+# Go 標準ライブラリの Suffix Array を使用（リテラル検索専用）
+bwtsearch build --algo suffixarray data/moby_dick.txt data/moby_dick.saidx
 ```
 
 ### `build-multi` — 複数ファイルからインデックス構築
 
 ```
-bwtsearch build-multi [--algo doubling|sais] [--occ bitvectors|wavelet] <index-file> <file1> [file2 ...]
+bwtsearch build-multi [--algo doubling|sais|suffixarray] [--occ bitvectors|wavelet] <index-file> <file1> [file2 ...]
 ```
 
 複数のテキストファイルを結合して FM-index を構築します。ファイルの区切りには改行（`\n`）が使われます。
@@ -173,7 +176,7 @@ bwtsearch browse <index-file> [--show N] [--context N]
 
 端末でインタラクティブに接尾辞配列を探索します。文字を入力するたびに検索結果が絞り込まれます。Backspace で削除、空 Enter で終了。
 
-### `search` — 星なし正規表現検索
+### `search` — 検索
 
 ```
 bwtsearch search [flags] <index-file> <pattern>
@@ -182,7 +185,12 @@ bwtsearch search [flags] <index-file> <pattern>
   --positions    テキスト位置のみ表示
 ```
 
-**サポートする演算子：**
+インデックスのバックエンドに応じて自動的に検索方式を選択します。
+
+- **FM-index**（`--algo doubling` または `--algo sais` で構築）：星なし正規表現によるパターン検索。
+- **Suffix Array**（`--algo suffixarray` で構築）：リテラル文字列検索のみ。正規表現クエリは非対応。
+
+**FM-index でサポートする演算子：**
 
 | 構文          | 意味                       | 星なし言語内？ |
 |---------------|---------------------------|----------------|
@@ -202,27 +210,22 @@ bwtsearch search [flags] <index-file> <pattern>
 **例：**
 
 ```bash
-# リテラル検索
+# リテラル検索（FM-index・Suffix Array どちらでも可）
 bwtsearch search --limit 20 moby.idx "white whale"
 
-# 選択
+# 選択（FM-index のみ）
 bwtsearch search --limit 10 moby.idx "whale|ship"
 
-# 文字クラス
+# 文字クラス（FM-index のみ）
 bwtsearch search moby.idx "[Ww]hale"
 
-# 星なし言語を超えるクエリ（エラーになる例）
+# 星なし言語を超えるクエリ（FM-index でエラーになる例）
 bwtsearch search moby.idx "wha.*"
 # → Pattern rejected: star-free violation: ".*" uses Kleene star (*)...
-```
 
-### `compare` — 標準ライブラリとの比較
-
+# Suffix Array インデックスに対するリテラル検索
+bwtsearch search --limit 20 moby.saidx "white whale"
 ```
-bwtsearch compare <input-file> <pattern> [--limit N]
-```
-
-同一テキストに対して FM-index と Go 標準の `index/suffixarray` を実行し、件数と処理時間を比較します。
 
 ### `web` — 検索を試せる簡易 Web アプリ
 
@@ -230,7 +233,7 @@ bwtsearch compare <input-file> <pattern> [--limit N]
 bwtsearch web [--index FILE] [--addr ADDR] [--limit N] [--context N] [--min-chars N]
 ```
 
-インデックスを読み込んでローカル HTTP サーバーを起動し、ブラウザ上で星なし正規表現検索を試せます。
+インデックスを読み込んでローカル HTTP サーバーを起動し、ブラウザ上で検索を試せます。FM-index バックエンドの場合は星なし正規表現検索が可能です。
 
 - `--index FILE`: 読み込むインデックス（既定値 `data/moby_dick.idx`）
 - `--addr ADDR`: 待ち受けアドレス（既定値 `:8080`）
@@ -282,9 +285,6 @@ make build-index-kenshin
 
 # 3. サンプル検索（「上杉謙信」をリテラル検索）
 make search-demo-kenshin
-
-# 4. FM-index vs 標準ライブラリの比較
-make compare-demo-kenshin
 ```
 
 直接 CLI で操作する場合:

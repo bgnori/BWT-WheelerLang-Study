@@ -28,7 +28,7 @@ lint:
 ## clean: remove build artifacts and index files
 clean:
 	rm -f $(BINARY)
-	rm -f $(DATADIR)/*.idx
+	rm -f $(DATADIR)/*.idx $(DATADIR)/*.saidx
 
 ## download-testdata: download Project Gutenberg Moby Dick text (not committed)
 download-testdata:
@@ -43,9 +43,10 @@ build-index: $(DATADIR)/moby_dick.txt
 search-demo: $(INDEXFILE)
 	./$(BINARY) search --limit 10 $(INDEXFILE) "white whale"
 
-## compare-demo: compare FM-index vs stdlib for a sample pattern
-compare-demo: $(DATADIR)/moby_dick.txt
-	./$(BINARY) compare $(DATADIR)/moby_dick.txt "whale"
+## suffixarray-demo: build and search with stdlib suffix array for comparison
+suffixarray-demo: $(DATADIR)/moby_dick.txt
+	./$(BINARY) build --algo suffixarray $(DATADIR)/moby_dick.txt $(DATADIR)/moby_dick.saidx
+	./$(BINARY) search --limit 10 $(DATADIR)/moby_dick.saidx "whale"
 
 ## download-kenshin: download Aozora Bunko 上杉謙信 and convert to UTF-8 (not committed)
 download-kenshin:
@@ -60,9 +61,10 @@ build-index-kenshin: $(DATADIR)/kenshin.txt
 search-demo-kenshin: $(KENSHIN_INDEXFILE)
 	./$(BINARY) search --limit 5 $(KENSHIN_INDEXFILE) "上杉謙信"
 
-## compare-demo-kenshin: compare FM-index vs stdlib for a sample pattern
-compare-demo-kenshin: $(DATADIR)/kenshin.txt
-	./$(BINARY) compare $(DATADIR)/kenshin.txt "上杉謙信"
+## suffixarray-demo-kenshin: build and search with stdlib suffix array for 上杉謙信
+suffixarray-demo-kenshin: $(DATADIR)/kenshin.txt
+	./$(BINARY) build --algo suffixarray $(DATADIR)/kenshin.txt $(DATADIR)/kenshin.saidx
+	./$(BINARY) search --limit 5 $(DATADIR)/kenshin.saidx "上杉謙信"
 
 ## docker-build: build the Docker image
 docker-build:
@@ -86,10 +88,11 @@ build-index-git: $(GIT_SRC_DIR)
 search-demo-git: $(GIT_INDEXFILE)
 	./$(BINARY) search --limit 10 $(GIT_INDEXFILE) "commit"
 
-## compare-demo-git: compare FM-index vs stdlib for a sample pattern
-compare-demo-git: $(GIT_SRC_DIR)
-	cat $(GIT_SRC_DIR)/commit.c | ./$(BINARY) compare /dev/stdin "commit" 2>/dev/null || \
-	    find $(GIT_SRC_DIR) -name "*.c" | head -1 | xargs -I{} ./$(BINARY) compare {} "commit"
+## suffixarray-demo-git: build and search with stdlib suffix array for Git source
+suffixarray-demo-git: $(GIT_SRC_DIR)
+	find $(GIT_SRC_DIR) -type f \( -name "*.c" -o -name "*.h" \) | sort | \
+	    xargs ./$(BINARY) build-multi --algo suffixarray $(DATADIR)/git.saidx
+	./$(BINARY) search --limit 10 $(DATADIR)/git.saidx "commit"
 
 help:
 	@grep -E '^## ' Makefile | sed 's/## /  /'

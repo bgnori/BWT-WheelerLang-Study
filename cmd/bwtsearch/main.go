@@ -2,14 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
-	"index/suffixarray"
 	"io"
 	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,6 +16,13 @@ import (
 	bwtsearch "github.com/bgnori/bwt-wheelerlang-study"
 	"golang.org/x/term"
 )
+
+// anyIndex is satisfied by both *bwtsearch.Index (FM-index) and
+// *bwtsearch.StdlibIndex (stdlib suffix array).
+type anyIndex interface {
+	TextLen() int
+	ContextAround(pos, patLen, ctxSize int) string
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -40,8 +46,6 @@ func main() {
 		err = runSearch(os.Args[2:])
 	case "web":
 		err = runWeb(os.Args[2:])
-	case "compare":
-		err = runCompare(os.Args[2:])
 	case "help", "-h", "--help":
 		usage()
 		return
@@ -61,26 +65,41 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "bwtsearch <command> [args]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
-	fmt.Fprintln(os.Stderr, "  build [--algo doubling|sais] [--occ bitvectors|wavelet] <input-file> <index-file>")
-	fmt.Fprintln(os.Stderr, "  build-multi [--algo doubling|sais] [--occ bitvectors|wavelet] <index-file> <file1> [file2 ...]")
+	fmt.Fprintln(os.Stderr, "  build [--algo doubling|sais|suffixarray] [--occ bitvectors|wavelet] <input-file> <index-file>")
+	fmt.Fprintln(os.Stderr, "  build-multi [--algo doubling|sais|suffixarray] [--occ bitvectors|wavelet] <index-file> <file1> [file2 ...]")
 	fmt.Fprintln(os.Stderr, "  info <index-file>")
 	fmt.Fprintln(os.Stderr, "  graph [flags] <index-file>")
 	fmt.Fprintln(os.Stderr, "  browse <index-file> [--show N] [--context N]")
 	fmt.Fprintln(os.Stderr, "  search [flags] <index-file> <pattern>")
 	fmt.Fprintln(os.Stderr, "  web [--index FILE] [--addr ADDR] [--limit N] [--context N] [--min-chars N]")
-	fmt.Fprintln(os.Stderr, "  compare [flags] <input-file> <pattern>")
 }
 
 func runBuild(args []string) error {
 	fs := flag.NewFlagSet("build", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	algoFlag := fs.String("algo", "doubling", "suffix-array construction algorithm: doubling or sais")
+	algoFlag := fs.String("algo", "doubling", "suffix-array construction algorithm: doubling, sais, or suffixarray")
 	occFlag := fs.String("occ", "bitvectors", "occurrence-array structure: bitvectors or wavelet")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 2 {
-		return fmt.Errorf("usage: bwtsearch build [--algo doubling|sais] [--occ bitvectors|wavelet] <input-file> <index-file>")
+		return fmt.Errorf("usage: bwtsearch build [--algo doubling|sais|suffixarray] [--occ bitvectors|wavelet] <input-file> <index-file>")
+	}
+
+	inputPath := fs.Arg(0)
+	indexPath := fs.Arg(1)
+	text, err := os.ReadFile(inputPath)
+	if err != nil {
+		return fmt.Errorf("read input: %w", err)
+	}
+
+	if strings.ToLower(*algoFlag) == "suffixarray" {
+		idx := bwtsearch.BuildStdlib(text)
+		if err := idx.Save(indexPath); err != nil {
+			return err
+		}
+		fmt.Printf("built stdlib suffix array index: %s (%d bytes)\n", indexPath, idx.TextLen())
+		return nil
 	}
 
 	algo, err := parseAlgo(*algoFlag)
@@ -90,13 +109,6 @@ func runBuild(args []string) error {
 	occ, err := parseOcc(*occFlag)
 	if err != nil {
 		return err
-	}
-
-	inputPath := fs.Arg(0)
-	indexPath := fs.Arg(1)
-	text, err := os.ReadFile(inputPath)
-	if err != nil {
-		return fmt.Errorf("read input: %w", err)
 	}
 
 	idx := bwtsearch.BuildWithOptions(text, algo, occ)
@@ -116,22 +128,13 @@ func runBuild(args []string) error {
 func runBuildMulti(args []string) error {
 	fs := flag.NewFlagSet("build-multi", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	algoFlag := fs.String("algo", "doubling", "suffix-array construction algorithm: doubling or sais")
+	algoFlag := fs.String("algo", "doubling", "suffix-array construction algorithm: doubling, sais, or suffixarray")
 	occFlag := fs.String("occ", "bitvectors", "occurrence-array structure: bitvectors or wavelet")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() < 2 {
-		return fmt.Errorf("usage: bwtsearch build-multi [--algo doubling|sais] [--occ bitvectors|wavelet] <index-file> <file1> [file2 ...]")
-	}
-
-	algo, err := parseAlgo(*algoFlag)
-	if err != nil {
-		return err
-	}
-	occ, err := parseOcc(*occFlag)
-	if err != nil {
-		return err
+		return fmt.Errorf("usage: bwtsearch build-multi [--algo doubling|sais|suffixarray] [--occ bitvectors|wavelet] <index-file> <file1> [file2 ...]")
 	}
 
 	indexPath := fs.Arg(0)
@@ -142,6 +145,24 @@ func runBuildMulti(args []string) error {
 			return fmt.Errorf("read input %s: %w", path, err)
 		}
 		texts = append(texts, text)
+	}
+
+	if strings.ToLower(*algoFlag) == "suffixarray" {
+		idx := bwtsearch.BuildStdlibFromFiles(texts, nil)
+		if err := idx.Save(indexPath); err != nil {
+			return err
+		}
+		fmt.Printf("built stdlib suffix array index from %d files: %s (%d bytes)\n", len(texts), indexPath, idx.TextLen())
+		return nil
+	}
+
+	algo, err := parseAlgo(*algoFlag)
+	if err != nil {
+		return err
+	}
+	occ, err := parseOcc(*occFlag)
+	if err != nil {
+		return err
 	}
 
 	idx := bwtsearch.BuildFromFilesWithOptions(texts, nil, algo, occ)
@@ -168,14 +189,21 @@ func runInfo(args []string) error {
 		return fmt.Errorf("usage: bwtsearch info <index-file>")
 	}
 
-	idx, err := loadIndex(fs.Arg(0))
+	idx, err := loadAnyIndex(fs.Arg(0))
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("text length: %d\n", idx.TextLen())
-	fmt.Printf("sa length: %d\n", idx.SALen())
-	fmt.Printf("alphabet size: %d\n", idx.AlphabetSize())
+	switch fi := idx.(type) {
+	case *bwtsearch.Index:
+		fmt.Printf("backend: fm-index\n")
+		fmt.Printf("text length: %d\n", fi.TextLen())
+		fmt.Printf("sa length: %d\n", fi.SALen())
+		fmt.Printf("alphabet size: %d\n", fi.AlphabetSize())
+	case *bwtsearch.StdlibIndex:
+		fmt.Printf("backend: stdlib suffixarray\n")
+		fmt.Printf("text length: %d\n", fi.TextLen())
+	}
 	return nil
 }
 
@@ -191,9 +219,13 @@ func runGraph(args []string) error {
 		return fmt.Errorf("usage: bwtsearch graph [flags] <index-file>")
 	}
 
-	idx, err := loadIndex(fs.Arg(0))
+	anyIdx, err := loadAnyIndex(fs.Arg(0))
 	if err != nil {
 		return err
+	}
+	idx, ok := anyIdx.(*bwtsearch.Index)
+	if !ok {
+		return fmt.Errorf("graph command requires an FM-index (index was built with --algo suffixarray)")
 	}
 
 	graph := idx.WheelerGraphMermaid(*maxNodes)
@@ -220,7 +252,7 @@ func runBrowse(args []string) error {
 		return fmt.Errorf("usage: bwtsearch browse <index-file> [--show N] [--context N]")
 	}
 
-	idx, err := loadIndex(fs.Arg(0))
+	idx, err := loadAnyIndex(fs.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -232,7 +264,7 @@ func runBrowse(args []string) error {
 	return runBrowseLineMode(idx, *show, *context, os.Stdin, os.Stdout)
 }
 
-func runBrowseLineMode(idx *bwtsearch.Index, show int, context int, in io.Reader, out io.Writer) error {
+func runBrowseLineMode(idx anyIndex, show int, context int, in io.Reader, out io.Writer) error {
 	reader := bufio.NewScanner(in)
 	for {
 		fmt.Fprint(out, "> ")
@@ -251,7 +283,7 @@ func runBrowseLineMode(idx *bwtsearch.Index, show int, context int, in io.Reader
 	}
 }
 
-func runBrowseInteractive(idx *bwtsearch.Index, show int, context int, in *os.File, out io.Writer) error {
+func runBrowseInteractive(idx anyIndex, show int, context int, in *os.File, out io.Writer) error {
 	m := newBrowseModel(idx, show, context)
 	p := tea.NewProgram(m, tea.WithInput(in), tea.WithOutput(out))
 	if _, err := p.Run(); err != nil {
@@ -260,8 +292,8 @@ func runBrowseInteractive(idx *bwtsearch.Index, show int, context int, in *os.Fi
 	return nil
 }
 
-func printBrowseMatches(out io.Writer, idx *bwtsearch.Index, pattern string, show int, context int) error {
-	res, err := bwtsearch.Search(idx, pattern, show)
+func printBrowseMatches(out io.Writer, idx anyIndex, pattern string, show int, context int) error {
+	positions, truncated, err := searchAny(idx, pattern, show)
 	if err != nil {
 		_, writeErr := fmt.Fprintln(out, err)
 		if writeErr != nil {
@@ -270,7 +302,6 @@ func printBrowseMatches(out io.Writer, idx *bwtsearch.Index, pattern string, sho
 		return nil
 	}
 
-	positions := res.Positions(idx)
 	sort.Ints(positions)
 	for _, pos := range positions {
 		snippet := normalizeSnippet(idx.ContextAround(pos, len(pattern), context))
@@ -279,7 +310,7 @@ func printBrowseMatches(out io.Writer, idx *bwtsearch.Index, pattern string, sho
 	if len(positions) == 0 {
 		fmt.Fprintln(out, "(no matches)")
 	}
-	if res.Truncated {
+	if truncated {
 		fmt.Fprintf(out, "(truncated to %d results)\n", show)
 	}
 
@@ -296,7 +327,7 @@ func normalizeSnippet(s string) string {
 }
 
 type browseModel struct {
-	idx       *bwtsearch.Index
+	idx       anyIndex
 	show      int
 	context   int
 	input     textinput.Model
@@ -305,7 +336,7 @@ type browseModel struct {
 	errText   string
 }
 
-func newBrowseModel(idx *bwtsearch.Index, show int, context int) browseModel {
+func newBrowseModel(idx anyIndex, show int, context int) browseModel {
 	ti := textinput.New()
 	ti.Placeholder = "Type to search..."
 	ti.Prompt = "> "
@@ -353,19 +384,18 @@ func (m *browseModel) refreshResults() {
 		return
 	}
 
-	res, err := bwtsearch.Search(m.idx, pattern, m.show)
+	positions, truncated, err := searchAny(m.idx, pattern, m.show)
 	if err != nil {
 		m.errText = err.Error()
 		return
 	}
 
-	positions := res.Positions(m.idx)
 	sort.Ints(positions)
 	for _, pos := range positions {
 		snippet := normalizeSnippet(m.idx.ContextAround(pos, len(pattern), m.context))
 		m.results = append(m.results, fmt.Sprintf("%d: %s", pos, snippet))
 	}
-	m.truncated = res.Truncated
+	m.truncated = truncated
 }
 
 func (m browseModel) View() string {
@@ -413,18 +443,17 @@ func runSearch(args []string) error {
 		return fmt.Errorf("usage: bwtsearch search [flags] <index-file> <pattern>")
 	}
 
-	idx, err := loadIndex(fs.Arg(0))
+	idx, err := loadAnyIndex(fs.Arg(0))
 	if err != nil {
 		return err
 	}
 	pattern := fs.Arg(1)
 
-	res, err := bwtsearch.Search(idx, pattern, *limit)
+	positions, truncated, err := searchAny(idx, pattern, *limit)
 	if err != nil {
 		return err
 	}
 
-	positions := res.Positions(idx)
 	sort.Ints(positions)
 	if *positionsOnly {
 		for _, pos := range positions {
@@ -435,42 +464,30 @@ func runSearch(args []string) error {
 			fmt.Printf("%d: %s\n", pos, idx.ContextAround(pos, len(pattern), *context))
 		}
 	}
-	if res.Truncated {
+	if truncated {
 		fmt.Fprintf(os.Stderr, "warning: truncated to %d results\n", *limit)
 	}
 	return nil
 }
 
-func runCompare(args []string) error {
-	fs := flag.NewFlagSet("compare", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	limit := fs.Int("limit", 20, "maximum number of results")
-	if err := fs.Parse(args); err != nil {
-		return err
+// searchAny performs a pattern search against idx.
+// For FM-index backends, the pattern is interpreted as a star-free regular expression.
+// For stdlib suffix array backends, the pattern is matched literally.
+func searchAny(idx anyIndex, pattern string, limit int) (positions []int, truncated bool, err error) {
+	switch fi := idx.(type) {
+	case *bwtsearch.Index:
+		res, serr := bwtsearch.Search(fi, pattern, limit)
+		if serr != nil {
+			return nil, false, serr
+		}
+		return res.Positions(fi), res.Truncated, nil
+	case *bwtsearch.StdlibIndex:
+		pos := fi.Locate([]byte(pattern), limit)
+		trunc := limit > 0 && len(pos) == limit
+		return pos, trunc, nil
+	default:
+		return nil, false, fmt.Errorf("unsupported index type")
 	}
-	if fs.NArg() != 2 {
-		return fmt.Errorf("usage: bwtsearch compare [flags] <input-file> <pattern>")
-	}
-
-	text, err := os.ReadFile(fs.Arg(0))
-	if err != nil {
-		return fmt.Errorf("read input: %w", err)
-	}
-	pattern := []byte(fs.Arg(1))
-
-	start := time.Now()
-	idx := bwtsearch.Build(text)
-	fmCount := idx.Count(pattern)
-	fmElapsed := time.Since(start)
-
-	start = time.Now()
-	sa := suffixarray.New(text)
-	stdlibCount := len(sa.Lookup(pattern, *limit))
-	stdlibElapsed := time.Since(start)
-
-	fmt.Printf("fm-index: %d matches in %s\n", fmCount, fmElapsed)
-	fmt.Printf("stdlib  : %d matches in %s\n", stdlibCount, stdlibElapsed)
-	return nil
 }
 
 func parseAlgo(s string) (bwtsearch.SuffixArrayAlgorithm, error) {
@@ -480,7 +497,7 @@ func parseAlgo(s string) (bwtsearch.SuffixArrayAlgorithm, error) {
 	case "sais":
 		return bwtsearch.AlgorithmSAIS, nil
 	default:
-		return 0, fmt.Errorf("unknown algorithm %q: choose doubling or sais", s)
+		return 0, fmt.Errorf("unknown algorithm %q: choose doubling, sais, or suffixarray", s)
 	}
 }
 
@@ -495,6 +512,23 @@ func parseOcc(s string) (bwtsearch.OccStructure, error) {
 	}
 }
 
-func loadIndex(path string) (*bwtsearch.Index, error) {
-	return bwtsearch.Load(path)
+// loadAnyIndex opens path and returns the appropriate index type based on the
+// on-disk magic: FMIDX01/FMIDX02 for FM-index, SAIDX01 for stdlib suffix array.
+func loadAnyIndex(path string) (anyIndex, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open index: %w", err)
+	}
+	defer f.Close()
+
+	magic := make([]byte, 7)
+	if _, err := io.ReadFull(f, magic); err != nil {
+		return nil, fmt.Errorf("read index magic: %w", err)
+	}
+
+	r := io.MultiReader(bytes.NewReader(magic), f)
+	if string(magic) == "SAIDX01" {
+		return bwtsearch.ReadStdlibFrom(r)
+	}
+	return bwtsearch.ReadFrom(r)
 }

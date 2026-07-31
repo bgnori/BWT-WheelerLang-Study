@@ -29,7 +29,7 @@ func runWeb(args []string) error {
 		*minChars = 1
 	}
 
-	idx, err := loadIndex(*indexPath)
+	idx, err := loadAnyIndex(*indexPath)
 	if err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ func runWeb(args []string) error {
 }
 
 type webApp struct {
-	idx                 *bwtsearch.Index
+	idx                 anyIndex
 	defaultLimit        int
 	defaultContext      int
 	minInteractiveChars int
@@ -106,11 +106,13 @@ func (a webApp) handleInfo(w http.ResponseWriter, _ *http.Request) {
 	resp := infoResponse{
 		IndexPath:           a.indexPath,
 		TextLength:          a.idx.TextLen(),
-		SuffixLength:        a.idx.SALen(),
-		AlphabetSize:        a.idx.AlphabetSize(),
 		DefaultLimit:        a.defaultLimit,
 		ContextSize:         a.defaultContext,
 		MinInteractiveChars: a.minInteractiveChars,
+	}
+	if fi, ok := a.idx.(*bwtsearch.Index); ok {
+		resp.SuffixLength = fi.SALen()
+		resp.AlphabetSize = fi.AlphabetSize()
 	}
 	a.writeJSON(w, http.StatusOK, resp)
 }
@@ -125,26 +127,36 @@ func (a webApp) handleSearch(w http.ResponseWriter, r *http.Request) {
 	limit := parsePositiveInt(r.URL.Query().Get("limit"), a.defaultLimit)
 	contextSize := parsePositiveInt(r.URL.Query().Get("context"), a.defaultContext)
 
-	res, err := bwtsearch.Search(a.idx, q, limit)
+	positions, truncated, err := searchAny(a.idx, q, limit)
 	if err != nil {
 		a.writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
 	}
 
-	positions := res.Positions(a.idx)
 	sort.Ints(positions)
 
-	re, err := syntax.Parse(q, syntax.Perl)
-	if err != nil {
-		a.writeJSON(w, http.StatusBadRequest, apiError{Error: fmt.Sprintf("invalid regex: %v", err)})
-		return
+	// Regex-based match explanation is only available for FM-index backends.
+	var re *syntax.Regexp
+	var text []byte
+	if fi, ok := a.idx.(*bwtsearch.Index); ok {
+		re, err = syntax.Parse(q, syntax.Perl)
+		if err != nil {
+			a.writeJSON(w, http.StatusBadRequest, apiError{Error: fmt.Sprintf("invalid regex: %v", err)})
+			return
+		}
+		text = fullTextBytes(fi)
 	}
-	text := fullTextBytes(a.idx)
 
 	matches := make([]matchResponse, 0, len(positions))
 	for _, pos := range positions {
-		matchLen, choices := explainMatchAt(re, text, pos)
-		before, matched, after := splitContext(text, pos, matchLen, contextSize)
+		var matchLen int
+		var choices []string
+		if re != nil && text != nil {
+			matchLen, choices = explainMatchAt(re, text, pos)
+		} else {
+			matchLen = len(q)
+		}
+		before, matched, after := splitContext([]byte(a.idx.ContextAround(0, a.idx.TextLen(), 0)), pos, matchLen, contextSize)
 		snippet := before + matched + after
 		matches = append(matches, matchResponse{
 			Position: pos,
@@ -156,10 +168,15 @@ func (a webApp) handleSearch(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	totalCount := len(positions)
+	if truncated {
+		totalCount = limit
+	}
+
 	a.writeJSON(w, http.StatusOK, searchResponse{
 		Pattern:    q,
-		TotalCount: res.TotalCount,
-		Truncated:  res.Truncated,
+		TotalCount: totalCount,
+		Truncated:  truncated,
 		Limit:      limit,
 		Context:    contextSize,
 		Matches:    matches,
@@ -189,7 +206,7 @@ type traceState struct {
 }
 
 func fullTextBytes(idx *bwtsearch.Index) []byte {
-	// ContextAround can return the full text when the requested range spans it all.
+	// ContextAround returns the full text when the requested range spans it all.
 	return []byte(idx.ContextAround(0, idx.TextLen(), 0))
 }
 
