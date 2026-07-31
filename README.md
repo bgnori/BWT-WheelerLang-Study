@@ -290,6 +290,65 @@ docker compose run bwtsearch search /data/kenshin.idx "上杉謙信"
 
 > **注意：** テキストデータおよびインデックスファイル（`data/*.txt`, `data/*.idx`）は `.gitignore` に登録されており、リポジトリにはコミットしないでください。
 
+### Git ソースコード（C 言語コーパス）
+
+[Git v2.45.0](https://github.com/git/git/releases/tag/v2.45.0) の公式リリースタグから `.c` / `.h` ファイルのみを抽出し、`data/git-src/` に保存します。英語散文（Moby Dick）・日本語テキスト（上杉謙信）とは異なる、プログラムソースコードを対象にした FM-index の検証に使えます。
+
+```bash
+./scripts/download_git.sh
+# または
+make download-git
+```
+
+#### ローカル（Go）での手順
+
+複数ファイルをまとめて索引化するため `build-multi` サブコマンドを使います。
+
+```bash
+# 1. Git ソースをダウンロード
+make download-git
+
+# 2. FM-index を構築（.c/.h ファイルを一括索引化）
+make build-index-git
+
+# 3. サンプル検索（"commit" をリテラル検索）
+make search-demo-git
+
+# 4. FM-index vs 標準ライブラリの比較
+make compare-demo-git
+```
+
+直接 CLI で操作する場合:
+
+```bash
+# インデックス構築（.c/.h ファイルをまとめて索引化）
+find data/git-src -type f \( -name "*.c" -o -name "*.h" \) | sort | \
+    xargs ./bwtsearch build-multi data/git.idx
+
+# 検索
+./bwtsearch search data/git.idx "commit" --limit 10
+
+# インデックス情報
+./bwtsearch info data/git.idx
+```
+
+#### Docker での手順
+
+```bash
+# イメージをビルド
+docker compose build
+
+# Git ソースをダウンロード
+docker compose run download-git
+
+# FM-index を構築
+find data/git-src -type f \( -name "*.c" -o -name "*.h" \) | sort | \
+    xargs docker compose run bwtsearch build-multi /data/git.idx
+
+# 検索
+docker compose run bwtsearch search /data/git.idx "commit"
+```
+
 ### Git LFS について
 
 このリポジトリは **現時点では Git LFS を必須としていません**。大容量になりやすいデータは `data/` 配下に置き、`.gitignore` で管理します。
