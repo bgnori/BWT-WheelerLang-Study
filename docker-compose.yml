@@ -55,3 +55,19 @@ services:
              echo 'Downloaded and prepared ecoli.txt'"
     volumes:
       - ./data:/data
+
+  # Convenience service that downloads Oryza sativa chromosome 1 genome from
+  # NCBI and converts the FASTA to plain-text DNA for FM-index testing.
+  download-osativa-chr1:
+    image: alpine:3.19
+    command: >
+      sh -c "apk --no-cache add wget gzip &&
+             mkdir -p /data &&
+             wget -q -O /tmp/osativa_chr1.fna.gz
+               'https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/001/433/935/GCA_001433935.1_IRGSP-1.0/GCA_001433935.1_IRGSP-1.0_assembly_structure/Primary_Assembly/assembled_chromosomes/FASTA/chr1.fa.gz' &&
+             gunzip -c /tmp/osativa_chr1.fna.gz > /data/osativa_chr1.fna &&
+             rm -f /tmp/osativa_chr1.fna.gz &&
+             awk '/^>/{if(seq!=\"\"){print toupper(seq);seq=\"\"};next}{seq=seq $0}END{if(seq!=\"\")print toupper(seq)}' /data/osativa_chr1.fna > /data/osativa_chr1.txt &&
+             echo 'Downloaded and prepared osativa_chr1.txt'"
+    volumes:
+      - ./data:/data
