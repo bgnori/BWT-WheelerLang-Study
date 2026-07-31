@@ -156,7 +156,7 @@ func Search(idx *fmindex.Index, pattern string, limit int) (*SearchResult, error
 
 ---
 
-## #6 — `Build(nil)` の動作が未テスト・未文書化 🟡
+## #6 — `Build(nil)` の動作が未テスト・未文書化 🟡 ✅ 対応済み
 
 **ファイル:** `api.go`, `api_test.go`
 
@@ -168,9 +168,13 @@ func Search(idx *fmindex.Index, pattern string, limit int) (*SearchResult, error
 1. `Build` の godoc に「nil または空のスライスを渡すと番兵のみのインデックスを返す」と追記する
 2. `Build(nil)` と `Build([]byte{})` の動作を検証するテストを追加する
 
+**対応内容:**  
+`Build` の godoc に nil / 空スライスの動作（番兵のみのインデックス、`TextLen` = 0、`SALen` = 1）を明記し、
+`TestBuildNilAndEmpty` で `Build(nil)` と `Build([]byte{})` の `TextLen`・`SALen`・`Count`・`Search` を検証済み。
+
 ---
 
-## #7 — CI/CD ワークフローが存在しない 🔴
+## #7 — CI/CD ワークフローが存在しない 🔴 ✅ 対応済み
 
 **問題:**  
 `.github/workflows/` ディレクトリがなく、プッシュや PR ごとにテストが自動実行されない。  
@@ -193,6 +197,10 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
 ```
+
+**対応内容:**  
+`.github/workflows/ci.yml` を追加。push / pull_request ごとに `go vet ./...` と
+`go test -race ./...` を実行する（Go バージョンは `go.mod` から取得）。
 
 ---
 
@@ -252,7 +260,7 @@ git push origin v0.1.0
 
 ---
 
-## #11 — `BuildStdlibFromFiles` のセパレータに `0x00` を渡してもエラーにならない 🔴
+## #11 — `BuildStdlibFromFiles` のセパレータに `0x00` を渡してもエラーにならない 🔴 ✅ 対応済み
 
 **ファイル:** `stdlib_index.go`
 
@@ -282,9 +290,13 @@ for _, b := range separator {
 
 または、StdlibIndex はバイト 0x00 を特別扱いしない旨を godoc に明記する。
 
+**対応内容:**  
+`BuildStdlibFromFiles` に `BuildFromFiles` と同一の 0x00 検証ループを追加し、godoc に panic 条件を明記。
+`TestBuildStdlibFromFilesPanicsOnNullSeparator` で検証済み。
+
 ---
 
-## #12 — `BiIndex` / `StdlibIndex` のメソッドに nil レシーバーチェックがない 🔴
+## #12 — `BiIndex` / `StdlibIndex` のメソッドに nil レシーバーチェックがない 🔴 ✅ 対応済み
 
 **ファイル:** `biindex.go`, `stdlib_index.go`
 
@@ -310,9 +322,15 @@ Issue #3 と同様に、以下のいずれかで統一する：
 2. panic を "documented behavior" として godoc に明記する
 3. `WriteTo` / `Save` には少なくともエラーを返す（破壊的変更なし）
 
+**対応内容:**  
+対処案 1 + 3 を採用。`BiIndex` の `TextLen`・`Count`・`Locate`・`ContextAround`・`FullInterval`・
+`ExtendLeft`・`ExtendRight` と `StdlibIndex` の `TextLen`・`Count`・`Locate`・`ContextAround` は
+nil レシーバーに対してゼロ値を返し、両者の `WriteTo`（および経由する `Save`）はエラーを返す。
+`TestNilBiIndexZeroValues`・`TestNilStdlibIndexZeroValues` で検証済み。
+
 ---
 
-## #13 — デシリアライズ時に長さフィールドを検証していない 🔴
+## #13 — デシリアライズ時に長さフィールドを検証していない 🔴 ✅ 対応済み
 
 **ファイル:** `internal/fmindex/fmindex.go`, `biindex.go`, `stdlib_index.go`
 
@@ -338,6 +356,15 @@ idx.text = make([]byte, tlen)   // tlen < 0 → panic / 巨大値 → OOM
 1. 負の値なら即座にエラーを返す
 2. 妥当な上限（残りストリームサイズが不明なため、たとえば `io.LimitReader` の併用や段階的読み込み）を検討する
 3. 少なくとも `tlen < 0 || n64 < 0` チェックとエラー返却を全デシリアライザに追加する
+
+**対応内容:**  
+- `internal/fmindex` の `readCommonHeader`: `n64` が `1 <= n64 <= MaxInt/4`（SA バッファ `n*4` の
+  オーバーフロー防止）であること、および `tlen == n64 - 1`（番兵の不変条件）であることを検証。
+- `ReadBiFrom`: `fwdLen` / `revLen` が負の場合はエラーを返す。
+- `ReadStdlibFrom`: `tlen` が負の場合はエラーを返す。
+
+`TestReadFromRejectsCorruptLengths`・`TestReadBiFromRejectsNegativeLength`・
+`TestReadStdlibFromRejectsNegativeLength` で検証済み。
 
 ---
 
@@ -372,15 +399,15 @@ seed-and-extend 系の近似検索では大きなオーバーヘッドになる�
 |---|----------|--------|------|
 | 1 | 位置アンカーがサイレントに無視される | 🔴 High | ✅ 対応済み |
 | 2 | `BuildFromFiles` のセパレータ検証なし | 🔴 High | ✅ 対応済み |
-| 3 | `*Index` メソッドの nil チェック非一貫 | 🔴 High | 🔸 `Search`/`Append`/`WriteTo` は対応済み、`Count`/`Locate` 等は未対応 |
-| 4 | Unicode 文字クラスがエラーなく 0 件になる | 🟡 Medium | 未対応（ドキュメント記載も未実施と再確認） |
+| 3 | `*Index` メソッドの nil チェック非一貫 | 🔴 High | ✅ 対応済み |
+| 4 | Unicode 文字クラスがエラーなく 0 件になる | 🟡 Medium | ✅ 対応済み（ドキュメント明記） |
 | 5 | `Search` が正規表現を 2 回パース | 🟡 Medium | ✅ 対応済み |
-| 6 | `Build(nil)` が未テスト・未文書化 | 🟡 Medium | 未対応 |
-| 7 | CI/CD ワークフローがない | 🔴 High | 未対応 |
+| 6 | `Build(nil)` が未テスト・未文書化 | 🟡 Medium | ✅ 対応済み |
+| 7 | CI/CD ワークフローがない | 🔴 High | ✅ 対応済み |
 | 8 | セマンティックバージョンタグがない | 🔴 High | 未対応 |
 | 9 | TUI 依存が利用者の `go.mod` に現れる | 🟢 Low | 未対応 |
 | 10 | モジュールパスに "study" が含まれる | 🟢 Low | 未対応 |
-| 11 | `BuildStdlibFromFiles` の 0x00 セパレータ検証なし | 🔴 High | 未対応 |
-| 12 | `BiIndex`/`StdlibIndex` のメソッドに nil レシーバーチェックなし | 🔴 High | 未対応 |
-| 13 | デシリアライズ時に長さフィールドを検証していない | 🔴 High | 未対応 |
+| 11 | `BuildStdlibFromFiles` の 0x00 セパレータ検証なし | 🔴 High | ✅ 対応済み |
+| 12 | `BiIndex`/`StdlibIndex` のメソッドに nil レシーバーチェックなし | 🔴 High | ✅ 対応済み |
+| 13 | デシリアライズ時に長さフィールドを検証していない | 🔴 High | ✅ 対応済み |
 | 14 | `BiIndex` 拡張が 1 ステップあたり O(σ) 回の rank 呼び出し | 🟢 Low | 未対応 |
