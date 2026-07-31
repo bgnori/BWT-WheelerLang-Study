@@ -56,20 +56,33 @@ make suffixarray-demo-ecoli
 ## 5. Oryza sativa（イネ）
 
 - ソース: [NCBI GenBank Assembly GCA_001433935.1](https://www.ncbi.nlm.nih.gov/datasets/genome/GCA_001433935.1/)
-- `download-osativa` は全ゲノム FASTA を `data/osativa.fna` として取得します。
-- `prepare-osativa-chr1` は全ゲノム FASTA から chromosome 1（既定: `AP014957.1`）を抽出し、索引対象の `data/osativa_chr1.txt` を作成します。
-- 別の FASTA レコードを対象にする場合は `OSATIVA_CHR1_SELECTOR` に awk 拡張正規表現を指定できます。
+- `download-osativa` は Oryza sativa 全体のゲノム FASTA を `data/osativa.fna` として取得します。
+- `prepare-osativa-chr1` は `data/osativa.fna` から指定に一致する FASTA レコードだけを抽出し、索引対象の `data/osativa_chr1.txt` を作成します。
+- 既定の抽出対象は chromosome 1（`AP014957.1`）です。別の FASTA レコードを対象にする場合は `OSATIVA_CHR1_SELECTOR` に awk 拡張正規表現を指定します。
 
 ```bash
+# 1. 全体 FASTA を取得
 make download-osativa
+
+# 2. 指定レコードを抽出して index 対象ファイルを作成
 make prepare-osativa-chr1
+
+# 3. 抽出済みファイルを索引化して検索
 make build-index-osativa-chr1
 make search-demo-osativa-chr1
+```
 
-# 互換エイリアス: 全ゲノム FASTA を取得
+`download-osativa-chr1` は互換エイリアスとして残していますが、取得されるファイルは chromosome 1 単体ではなく `data/osativa.fna` の全体 FASTA です。
+
+```bash
 make download-osativa-chr1
+```
 
-# 例: chromosome 2 を既存ターゲットの出力名で抽出する場合
+抽出対象を変更する例:
+
+```bash
+# chromosome 2 を data/osativa_chr1.txt に抽出する場合
+rm -f data/osativa_chr1.txt
 make prepare-osativa-chr1 OSATIVA_CHR1_SELECTOR='AP014958[.]1'
 ```
 
