@@ -70,6 +70,18 @@ const (
 	// Indexes built with this option are written in the FMIDX02 on-disk
 	// format.
 	OccWaveletTree OccStructure = OccStructure(fmindex.OccWaveletTree)
+	// OccWaveletMatrix uses a Wavelet Matrix over the BWT.  It provides the
+	// same O(log σ) rank complexity as OccWaveletTree but with a flat,
+	// cache-friendly memory layout.  Indexes built with this option use the
+	// FMIDX03 on-disk format.
+	OccWaveletMatrix OccStructure = OccStructure(fmindex.OccWaveletMatrix)
+	// OccRLBWT uses a run-length encoded BWT for rank queries.  The BWT is
+	// stored as a compact sequence of equal-character runs, which is the
+	// foundation of r-index style compressed indexes.  Rank queries run in
+	// O(log r) time where r is the number of BWT runs.  This is
+	// space-efficient for highly repetitive texts.
+	// Indexes built with this option use the FMIDX04 on-disk format.
+	OccRLBWT OccStructure = OccStructure(fmindex.OccRLBWT)
 )
 
 // Interval is a half-open suffix-array range [Lo, Hi).
@@ -239,6 +251,14 @@ func (idx *Index) SAAt(i int) int { return idx.inner.SAAt(i) }
 
 // AlphabetSize returns the number of distinct characters in the text.
 func (idx *Index) AlphabetSize() int { return idx.inner.AlphabetSize() }
+
+// NumBWTRuns returns the number of equal-character runs in the BWT.
+// This is the r parameter of the r-index: smaller values indicate more
+// repetitive texts and a more compact RLBWT representation.
+func (idx *Index) NumBWTRuns() int { return idx.inner.NumBWTRuns() }
+
+// OccType returns the occurrence-array structure used by this index.
+func (idx *Index) OccType() OccStructure { return OccStructure(idx.inner.OccType()) }
 
 // BWT returns a copy of the Burrows-Wheeler Transform.
 func (idx *Index) BWT() []byte { return idx.inner.BWT() }

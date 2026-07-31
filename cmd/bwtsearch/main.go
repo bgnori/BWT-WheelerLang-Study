@@ -65,25 +65,34 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "bwtsearch <command> [args]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
-	fmt.Fprintln(os.Stderr, "  build [--algo doubling|sais|suffixarray] [--occ bitvectors|wavelet] <input-file> <index-file>")
-	fmt.Fprintln(os.Stderr, "  build-multi [--algo doubling|sais|suffixarray] [--occ bitvectors|wavelet] <index-file> <file1> [file2 ...]")
+	fmt.Fprintln(os.Stderr, "  build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <input-file> <index-file>")
+	fmt.Fprintln(os.Stderr, "  build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <index-file> <file1> [file2 ...]")
 	fmt.Fprintln(os.Stderr, "  info <index-file>")
 	fmt.Fprintln(os.Stderr, "  graph [flags] <index-file>")
 	fmt.Fprintln(os.Stderr, "  browse <index-file> [--show N] [--context N]")
 	fmt.Fprintln(os.Stderr, "  search [flags] <index-file> <pattern>")
 	fmt.Fprintln(os.Stderr, "  web [--index FILE] [--addr ADDR] [--limit N] [--context N] [--min-chars N]")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Index types:")
+	fmt.Fprintln(os.Stderr, "  --algo doubling|sais      FM-index with doubling or SA-IS suffix array")
+	fmt.Fprintln(os.Stderr, "  --algo suffixarray        stdlib suffix array (literal patterns only)")
+	fmt.Fprintln(os.Stderr, "  --algo bifmindex          bidirectional FM-index (--occ applies)")
+	fmt.Fprintln(os.Stderr, "  --occ bitvectors          per-character bit-vectors (default, FMIDX01)")
+	fmt.Fprintln(os.Stderr, "  --occ wavelet             Wavelet Tree (FMIDX02)")
+	fmt.Fprintln(os.Stderr, "  --occ waveletmatrix       Wavelet Matrix (FMIDX03)")
+	fmt.Fprintln(os.Stderr, "  --occ rlbwt               run-length BWT / r-index (FMIDX04)")
 }
 
 func runBuild(args []string) error {
 	fs := flag.NewFlagSet("build", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	algoFlag := fs.String("algo", "doubling", "suffix-array construction algorithm: doubling, sais, or suffixarray")
-	occFlag := fs.String("occ", "bitvectors", "occurrence-array structure: bitvectors or wavelet")
+	algoFlag := fs.String("algo", "doubling", "suffix-array construction algorithm: doubling, sais, suffixarray, or bifmindex")
+	occFlag := fs.String("occ", "bitvectors", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, or rlbwt")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 2 {
-		return fmt.Errorf("usage: bwtsearch build [--algo doubling|sais|suffixarray] [--occ bitvectors|wavelet] <input-file> <index-file>")
+		return fmt.Errorf("usage: bwtsearch build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <input-file> <index-file>")
 	}
 
 	inputPath := fs.Arg(0)
@@ -93,12 +102,24 @@ func runBuild(args []string) error {
 		return fmt.Errorf("read input: %w", err)
 	}
 
-	if strings.ToLower(*algoFlag) == "suffixarray" {
+	switch strings.ToLower(*algoFlag) {
+	case "suffixarray":
 		idx := bwtsearch.BuildStdlib(text)
 		if err := idx.Save(indexPath); err != nil {
 			return err
 		}
 		fmt.Printf("built stdlib suffix array index: %s (%d bytes)\n", indexPath, idx.TextLen())
+		return nil
+	case "bifmindex":
+		occ, err := parseOcc(*occFlag)
+		if err != nil {
+			return err
+		}
+		idx := bwtsearch.BuildBiWithOptions(text, bwtsearch.AlgorithmDoubling, occ)
+		if err := idx.Save(indexPath); err != nil {
+			return err
+		}
+		fmt.Printf("built bidirectional FM-index: %s (%d bytes)\n", indexPath, idx.TextLen())
 		return nil
 	}
 
@@ -128,13 +149,13 @@ func runBuild(args []string) error {
 func runBuildMulti(args []string) error {
 	fs := flag.NewFlagSet("build-multi", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	algoFlag := fs.String("algo", "doubling", "suffix-array construction algorithm: doubling, sais, or suffixarray")
-	occFlag := fs.String("occ", "bitvectors", "occurrence-array structure: bitvectors or wavelet")
+	algoFlag := fs.String("algo", "doubling", "suffix-array construction algorithm: doubling, sais, suffixarray, or bifmindex")
+	occFlag := fs.String("occ", "bitvectors", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, or rlbwt")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() < 2 {
-		return fmt.Errorf("usage: bwtsearch build-multi [--algo doubling|sais|suffixarray] [--occ bitvectors|wavelet] <index-file> <file1> [file2 ...]")
+		return fmt.Errorf("usage: bwtsearch build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <index-file> <file1> [file2 ...]")
 	}
 
 	indexPath := fs.Arg(0)
@@ -147,12 +168,24 @@ func runBuildMulti(args []string) error {
 		texts = append(texts, text)
 	}
 
-	if strings.ToLower(*algoFlag) == "suffixarray" {
+	switch strings.ToLower(*algoFlag) {
+	case "suffixarray":
 		idx := bwtsearch.BuildStdlibFromFiles(texts, nil)
 		if err := idx.Save(indexPath); err != nil {
 			return err
 		}
 		fmt.Printf("built stdlib suffix array index from %d files: %s (%d bytes)\n", len(texts), indexPath, idx.TextLen())
+		return nil
+	case "bifmindex":
+		occ, err := parseOcc(*occFlag)
+		if err != nil {
+			return err
+		}
+		idx := bwtsearch.BuildBiFromFilesWithOptions(texts, nil, bwtsearch.AlgorithmDoubling, occ)
+		if err := idx.Save(indexPath); err != nil {
+			return err
+		}
+		fmt.Printf("built bidirectional FM-index from %d files: %s (%d bytes)\n", len(texts), indexPath, idx.TextLen())
 		return nil
 	}
 
@@ -196,15 +229,34 @@ func runInfo(args []string) error {
 
 	switch fi := idx.(type) {
 	case *bwtsearch.Index:
+		occName := occTypeName(fi.OccType())
 		fmt.Printf("backend: fm-index\n")
 		fmt.Printf("text length: %d\n", fi.TextLen())
 		fmt.Printf("sa length: %d\n", fi.SALen())
 		fmt.Printf("alphabet size: %d\n", fi.AlphabetSize())
+		fmt.Printf("occ structure: %s\n", occName)
+		fmt.Printf("bwt runs: %d\n", fi.NumBWTRuns())
 	case *bwtsearch.StdlibIndex:
 		fmt.Printf("backend: stdlib suffixarray\n")
 		fmt.Printf("text length: %d\n", fi.TextLen())
+	case *bwtsearch.BiIndex:
+		fmt.Printf("backend: bidirectional fm-index\n")
+		fmt.Printf("text length: %d\n", fi.TextLen())
 	}
 	return nil
+}
+
+func occTypeName(o bwtsearch.OccStructure) string {
+	switch o {
+	case bwtsearch.OccWaveletTree:
+		return "wavelet-tree"
+	case bwtsearch.OccWaveletMatrix:
+		return "wavelet-matrix"
+	case bwtsearch.OccRLBWT:
+		return "rlbwt"
+	default:
+		return "bitvectors"
+	}
 }
 
 func runGraph(args []string) error {
@@ -225,7 +277,7 @@ func runGraph(args []string) error {
 	}
 	idx, ok := anyIdx.(*bwtsearch.Index)
 	if !ok {
-		return fmt.Errorf("graph command requires an FM-index (index was built with --algo suffixarray)")
+		return fmt.Errorf("graph command requires an FM-index (index was built with --algo suffixarray or --algo bifmindex)")
 	}
 
 	graph := idx.WheelerGraphMermaid(*maxNodes)
@@ -472,7 +524,7 @@ func runSearch(args []string) error {
 
 // searchAny performs a pattern search against idx.
 // For FM-index backends, the pattern is interpreted as a star-free regular expression.
-// For stdlib suffix array backends, the pattern is matched literally.
+// For stdlib suffix array and bidirectional FM-index backends, the pattern is matched literally.
 func searchAny(idx anyIndex, pattern string, limit int) (positions []int, truncated bool, err error) {
 	switch fi := idx.(type) {
 	case *bwtsearch.Index:
@@ -482,6 +534,10 @@ func searchAny(idx anyIndex, pattern string, limit int) (positions []int, trunca
 		}
 		return res.Positions(fi), res.Truncated, nil
 	case *bwtsearch.StdlibIndex:
+		pos := fi.Locate([]byte(pattern), limit)
+		trunc := limit > 0 && len(pos) == limit
+		return pos, trunc, nil
+	case *bwtsearch.BiIndex:
 		pos := fi.Locate([]byte(pattern), limit)
 		trunc := limit > 0 && len(pos) == limit
 		return pos, trunc, nil
@@ -507,13 +563,18 @@ func parseOcc(s string) (bwtsearch.OccStructure, error) {
 		return bwtsearch.OccBitvectors, nil
 	case "wavelet", "wavelettree":
 		return bwtsearch.OccWaveletTree, nil
+	case "waveletmatrix", "wavelet-matrix", "wm":
+		return bwtsearch.OccWaveletMatrix, nil
+	case "rlbwt", "rindex", "r-index":
+		return bwtsearch.OccRLBWT, nil
 	default:
-		return 0, fmt.Errorf("unknown occ structure %q: choose bitvectors or wavelet", s)
+		return 0, fmt.Errorf("unknown occ structure %q: choose bitvectors, wavelet, waveletmatrix, or rlbwt", s)
 	}
 }
 
 // loadAnyIndex opens path and returns the appropriate index type based on the
-// on-disk magic: FMIDX01/FMIDX02 for FM-index, SAIDX01 for stdlib suffix array.
+// on-disk magic: FMIDX01/02/03/04 for FM-index variants, SAIDX01 for stdlib
+// suffix array, BIDX001 for bidirectional FM-index.
 func loadAnyIndex(path string) (anyIndex, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -527,8 +588,12 @@ func loadAnyIndex(path string) (anyIndex, error) {
 	}
 
 	r := io.MultiReader(bytes.NewReader(magic), f)
-	if string(magic) == "SAIDX01" {
+	switch string(magic) {
+	case "SAIDX01":
 		return bwtsearch.ReadStdlibFrom(r)
+	case "BIDX001":
+		return bwtsearch.ReadBiFrom(r)
+	default:
+		return bwtsearch.ReadFrom(r)
 	}
-	return bwtsearch.ReadFrom(r)
 }
