@@ -3,6 +3,7 @@
 package bwtsearch
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,23 @@ import (
 	"github.com/bgnori/bwt-wheelerlang-study/internal/fmindex"
 	"github.com/bgnori/bwt-wheelerlang-study/internal/starfree"
 )
+
+// ViolationError is returned by Check and Search when the pattern contains a
+// construct that violates the star-free constraint (e.g. Kleene star, +, or
+// unbounded repetition).  Callers can use errors.As to inspect the details.
+type ViolationError struct {
+	// Op is a human-readable name of the offending operator (e.g. "Kleene star (*)").
+	Op string
+	// SubExpr is the string form of the offending sub-expression.
+	SubExpr string
+}
+
+func (e *ViolationError) Error() string {
+	return fmt.Sprintf(
+		"star-free violation: %q uses %s, which introduces unbounded iteration",
+		e.SubExpr, e.Op,
+	)
+}
 
 // SuffixArrayAlgorithm selects the suffix-array construction algorithm.
 type SuffixArrayAlgorithm int
@@ -163,11 +181,22 @@ func (idx *Index) WheelerGraphMermaid(maxNodes int) string {
 }
 
 // Check validates that pattern is a star-free regular expression.
+// It returns a *ViolationError if the pattern contains Kleene star, one-or-more,
+// or an unbounded repetition, or a wrapped error for invalid syntax.
 func Check(pattern string) error {
-	return starfree.Check(pattern)
+	err := starfree.Check(pattern)
+	if err == nil {
+		return nil
+	}
+	var sv *starfree.ViolationError
+	if errors.As(err, &sv) {
+		return &ViolationError{Op: sv.Op, SubExpr: sv.SubExpr}
+	}
+	return err
 }
 
 // Search runs a star-free regex search over idx.
+// It returns a *ViolationError if pattern violates the star-free constraint.
 func Search(idx *Index, pattern string, limit int) (*SearchResult, error) {
 	if idx == nil || idx.inner == nil {
 		return nil, fmt.Errorf("nil index")
@@ -175,6 +204,10 @@ func Search(idx *Index, pattern string, limit int) (*SearchResult, error) {
 
 	res, err := starfree.Search(idx.inner, pattern, limit)
 	if err != nil {
+		var sv *starfree.ViolationError
+		if errors.As(err, &sv) {
+			return nil, &ViolationError{Op: sv.Op, SubExpr: sv.SubExpr}
+		}
 		return nil, err
 	}
 

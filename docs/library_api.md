@@ -9,11 +9,12 @@ The package also includes executable `go doc` examples in `example_test.go`.
 
 ## What is exposed
 
-- `Build`, `BuildWithAlgorithm`
+- `Build`, `BuildWithAlgorithm`, `BuildFromFiles`
 - `Load`, `ReadFrom`
 - `(*Index).Save`, `(*Index).WriteTo`
 - `(*Index).Count`, `(*Index).Locate`, `(*Index).ContextAround`
 - `Search` and `Check` for star-free regex search
+- `ViolationError` — returned when a pattern violates the star-free constraint
 - `WheelerGraphMermaid` for graph visualization
 
 ## Install
@@ -51,12 +52,33 @@ func main() {
 }
 ```
 
+## Build from multiple files
+
+`BuildFromFiles` concatenates several byte slices (e.g. multiple documents)
+with a separator and builds a single FM-index over the combined corpus.
+
+```go
+texts := [][]byte{
+	[]byte("hello world"),
+	[]byte("world peace"),
+}
+idx := bwtsearch.BuildFromFiles(texts, []byte("\n"))
+fmt.Println(idx.Count([]byte("world"))) // 2
+```
+
+A `nil` separator defaults to `"\n"`.  The separator must not contain `0x00`
+(reserved as the FM-index sentinel).
+
 ## Star-free regex search
 
 ```go
 res, err := bwtsearch.Search(idx, "ab?ra|cad", 20)
 if err != nil {
-	// Includes star-free validation errors and regex syntax errors.
+	// Distinguish star-free violations from regex syntax errors.
+	var ve *bwtsearch.ViolationError
+	if errors.As(err, &ve) {
+		log.Fatalf("star-free violation: %v", ve)
+	}
 	log.Fatal(err)
 }
 
@@ -64,7 +86,7 @@ positions := res.Positions(idx)
 fmt.Println("total:", res.TotalCount, "positions:", positions)
 ```
 
-Patterns with `*`, `+`, or `{n,}` are rejected by design.
+Patterns with `*`, `+`, or `{n,}` are rejected and return a `*ViolationError`.
 
 ## Choose suffix-array algorithm
 
@@ -74,8 +96,8 @@ idx := bwtsearch.BuildWithAlgorithm(text, bwtsearch.AlgorithmSAIS)
 
 Available algorithms:
 
-- `AlgorithmDoubling` (default)
-- `AlgorithmSAIS`
+- `AlgorithmDoubling` (default) — O(n log² n), moderate memory
+- `AlgorithmSAIS` — O(n) linear time, recommended for large texts
 
 ## Generate Wheeler graph (Mermaid)
 
@@ -84,7 +106,20 @@ graph := idx.WheelerGraphMermaid(20)
 fmt.Println(graph)
 ```
 
-## Stability notes
+## Versioning and stability
 
-- Treat the top-level package as the stable public API.
-- `internal/...` packages are implementation details and may change.
+- Treat the top-level package as the **stable public API**.
+- `internal/...` packages are implementation details and may change without
+  notice; do not import them directly.
+- The package follows [Semantic Versioning](https://semver.org/). Use the
+  `@latest` tag or pin a specific `@vX.Y.Z` tag for reproducible builds.
+- `SearchResult.Truncated` and `SearchResult.TotalCount` are part of the
+  stable API; inspect them when `limit > 0` to detect truncation.
+
+## Error handling summary
+
+| Condition | Error type |
+|---|---|
+| Pattern uses `*`, `+`, or `{n,}` | `*bwtsearch.ViolationError` |
+| Pattern has invalid regex syntax | wrapped `*syntax.Error` from `regexp/syntax` |
+| `nil` Index passed to Search | plain `error` string |
