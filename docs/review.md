@@ -18,13 +18,15 @@
 | 内部実装が `internal/` に隔離されている | ✅ | `internal/fmindex`, `internal/bitvector`, `internal/starfree` |
 | パッケージコメント（godoc）が記述されている | ✅ | 全パッケージに記述済み |
 | 公開シンボルにコメントが付いている | ✅ | 全エクスポートに docstring あり |
-| runnable な Example テストが存在する | ✅ | `example_test.go` に 5 例 |
+| runnable な Example テストが存在する | ✅ | `example_test.go` に 8 例 |
 | ライセンスファイルが存在する | ✅ | `LICENSE` (MIT) |
 | `go.mod` と `go.sum` が最新状態 | ✅ | go 1.21 |
 | `go vet` / `go test -race` がクリア | ✅ | 全パッケージ PASS |
 | `io.WriterTo` 契約を満たしている | ✅ | **本レビューで修正** |
 | エラー型が公開 API から型アサート可能 | ✅ | **本レビューで追加** |
 | `BuildFromFiles` がドキュメントに記載されている | ✅ | **本レビューで追加** |
+| `BuildWithOptions` / `OccWaveletTree` がドキュメントに記載されている | ✅ | **ウェーブレット木追加時に反映** |
+| `Append` (インクリメンタル更新) がドキュメントに記載されている | ✅ | **RopeBWT 追加時に反映** |
 
 ---
 
@@ -151,3 +153,17 @@ Go モジュールシステムはパッケージ単位で依存関係を解決�
 | `api.go` | `ViolationError` 型を公開 API に追加、`Check`/`Search` でエラーを変換 |
 | `docs/library_api.md` | `BuildFromFiles`、エラー型、バージョニングの説明を追加 |
 | `docs/review.md` | 本ドキュメント（新規作成） |
+
+その後の機能追加で更新した内容:
+
+| 変更ファイル | 内容 |
+|---|---|
+| `internal/wavelet/` | Wavelet Tree 実装を新規追加 |
+| `internal/fmindex/occ.go` | `OccWaveletTree` オプションを追加、FMIDX02 フォーマット対応 |
+| `internal/fmindex/rope.go` | RopeBWT スタイルのインクリメンタル `Append` を追加 |
+| `api.go` | `BuildWithOptions`、`OccStructure`/`OccBitvectors`/`OccWaveletTree`、`UnsupportedError`、`Interval`、`SearchResult`、`WriteTo`、`Append` を追加 |
+| `example_test.go` | `ExampleBuild_japanese`、`ExampleBuildWithOptions`、`ExampleIndex_Append` を追加（計 8 例） |
+| `git_source_test.go` | `BuildFromFiles` を使ったマルチファイルインデックスの統合テストを追加 |
+| `bench_test.go` | 3 データセット × 3 アルゴリズムのベンチマークスイートを追加 |
+| `docs/library_api.md` | `BuildWithOptions`、`OccStructure`、`WriteTo`、型一覧を追記 |
+| `README.md` | API 一覧・アーキテクチャ図に `wavelet/` および新規 API を反映 |

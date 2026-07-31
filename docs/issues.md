@@ -74,13 +74,17 @@ godoc にも panic 条件を明記した。`api_test.go` に 2 件のテスト�
 **ファイル:** `api.go`
 
 **問題:**  
-`WriteTo` と `Search`（公開 API 側）は `idx == nil || idx.inner == nil` をチェックするが、  
+`WriteTo`、`Append`、`Search`（公開 API 側）は `idx == nil || idx.inner == nil` をチェックするが、  
 `Count`、`Locate`、`TextLen`、`SALen`、`SAAt`、`AlphabetSize`、`BWT` は nil チェックなしで panic します。
 
 ```go
 var idx *bwtsearch.Index
 idx.Count([]byte("abc"))  // → panic: runtime error: nil pointer dereference
 ```
+
+**現在の状態（部分対応）:**  
+`TestNilIndexErrors` で `Search`、`Append`、`WriteTo` の nil チェックを検証するテストが追加されています。
+ただし `Count`、`Locate`、`TextLen` 等の nil チェックは未追加のため、問題は完全には解消されていません。
 
 **対処案:**  
 以下のいずれかに統一する：
@@ -107,6 +111,10 @@ res, err := bwtsearch.Search(idx, "[あ-を]", 0)
 **対処案:**  
 - Unicode 範囲（rune > 127）を含む文字クラスに対して `UnsupportedError` を返す
 - または `docs/library_api.md` に「文字クラスは ASCII (U+0000–U+007F) のみ対応」と明記する
+
+**現在の状態（部分対応）:**  
+`docs/library_api.md` の「Star-free regex search」節に ASCII 限定の制限事項を記載済み。
+`UnsupportedError` を返す対応は未実施。
 
 ---
 
@@ -237,8 +245,8 @@ git push origin v0.1.0
 |---|----------|--------|------|
 | 1 | 位置アンカーがサイレントに無視される | 🔴 High | ✅ 対応済み |
 | 2 | `BuildFromFiles` のセパレータ検証なし | 🔴 High | ✅ 対応済み |
-| 3 | `*Index` メソッドの nil チェック非一貫 | 🔴 High | 未対応 |
-| 4 | Unicode 文字クラスがエラーなく 0 件になる | 🟡 Medium | 未対応 |
+| 3 | `*Index` メソッドの nil チェック非一貫 | 🔴 High | 🔸 `Search`/`Append`/`WriteTo` は対応済み、`Count`/`Locate` 等は未対応 |
+| 4 | Unicode 文字クラスがエラーなく 0 件になる | 🟡 Medium | 🔸 ドキュメントに制限事項を記載済み（`UnsupportedError` 未対応） |
 | 5 | `Search` が正規表現を 2 回パース | 🟡 Medium | 未対応 |
 | 6 | `Build(nil)` が未テスト・未文書化 | 🟡 Medium | 未対応 |
 | 7 | CI/CD ワークフローがない | 🔴 High | 未対応 |

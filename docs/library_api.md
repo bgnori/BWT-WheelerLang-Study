@@ -9,13 +9,17 @@ The package also includes executable `go doc` examples in `example_test.go`.
 
 ## What is exposed
 
-- `Build`, `BuildWithAlgorithm`, `BuildFromFiles`
+- `Build`, `BuildWithAlgorithm`, `BuildWithOptions`, `BuildFromFiles`
 - `Load`, `ReadFrom`
 - `(*Index).Save`, `(*Index).WriteTo`
 - `(*Index).Append`, `(*Index).Count`, `(*Index).Locate`, `(*Index).ContextAround`
 - `Search` and `Check` for star-free regex search
 - `ViolationError` — returned when a pattern violates the star-free constraint
-- `UnsupportedError` — returned when a syntactically valid regex construct is unsupported
+- `UnsupportedError` — returned when a syntactically valid regex construct is unsupported (e.g. position anchors)
+- `SuffixArrayAlgorithm`, `AlgorithmDoubling`, `AlgorithmSAIS` — suffix-array algorithm selector
+- `OccStructure`, `OccBitvectors`, `OccWaveletTree` — occurrence-array implementation selector
+- `Interval` — half-open SA range `[Lo, Hi)` returned by `Search`
+- `SearchResult` — result type from `Search`, includes `Intervals`, `TotalCount`, `Truncated`, and `Positions()`
 - `WheelerGraphMermaid` for graph visualization
 
 ## Install
@@ -102,6 +106,11 @@ Patterns with `*`, `+`, or `{n,}` are rejected and return a `*ViolationError`.
 Position anchors (`^`, `$`, `\b`, `\B`) are not supported by FM-index backward
 search and return a `*UnsupportedError` instead of being silently ignored.
 
+**Known limitation — character classes are ASCII-only:** `evalCharClass` and
+`evalAnyChar` only process runes in the ASCII range (U+0000–U+007F).  A pattern
+such as `[あ-を]` returns 0 results without an error.  Use literal UTF-8 byte
+patterns or alternation (e.g. `上杉謙信|武田信玄`) for non-ASCII matching.
+
 ## Choose suffix-array algorithm
 
 ```go
@@ -112,6 +121,23 @@ Available algorithms:
 
 - `AlgorithmDoubling` (default) — O(n log² n), moderate memory
 - `AlgorithmSAIS` — O(n) linear time, recommended for large texts
+
+## Choose occurrence-array structure
+
+`BuildWithOptions` lets you select both the suffix-array algorithm and the
+occurrence-array implementation:
+
+```go
+idx := bwtsearch.BuildWithOptions(text, bwtsearch.AlgorithmSAIS, bwtsearch.OccWaveletTree)
+```
+
+Available occurrence structures:
+
+- `OccBitvectors` (default) — one succinct bit-vector per distinct character;
+  O(1) rank queries; on-disk format `FMIDX01`.
+- `OccWaveletTree` — a Wavelet Tree over the BWT; O(log σ) rank queries and
+  O(n log σ) total space.  Advantageous when the alphabet is large or nearly all
+  256 byte values appear; on-disk format `FMIDX02`.
 
 ## Generate Wheeler graph (Mermaid)
 
