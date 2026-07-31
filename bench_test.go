@@ -124,6 +124,62 @@ func loadReasonableDataset() benchDataset {
 	}
 }
 
+func loadGeneratedLogDataset() benchDataset {
+	if data, ok := benchReadDataFile("fake-logs/flog_apache_common.log"); ok && len(data) > 0 {
+		return benchDataset{
+			name: "GeneratedLog-ApacheCommon",
+			text: data,
+			exactPatterns: []string{
+				"GET", "HTTP/1.1", " 200 ", "Mozilla", "/",
+			},
+			regexPatterns: []string{
+				"GET|POST", "HTTP/1.0|HTTP/1.1", " 200 | 404 ",
+			},
+		}
+	}
+	return benchDataset{
+		name: "SyntheticLog-5MB",
+		text: benchSyntheticCorpus(
+			`127.0.0.1 - - [01/Jan/2026:00:00:00 +0000] "GET /index.html HTTP/1.1" 200 1234 "-" "Mozilla/5.0"`,
+			5*1024*1024,
+		),
+		exactPatterns: []string{
+			"GET", "HTTP/1.1", " 200 ", "Mozilla", "/",
+		},
+		regexPatterns: []string{
+			"GET|POST", "HTTP/1.0|HTTP/1.1", " 200 | 404 ",
+		},
+	}
+}
+
+func loadGenomeDataset() benchDataset {
+	if data, ok := benchReadDataFile("ecoli.txt"); ok && len(data) > 0 {
+		return benchDataset{
+			name: "Genome-Ecoli",
+			text: data,
+			exactPatterns: []string{
+				"ATGAAACGC", "GTTACCTGCC", "CGCGCG", "TTTTTT", "AGCTTTTC",
+			},
+			regexPatterns: []string{
+				"ATGAAACGC|GTTACCTGCC", "CGCGCG|GCGCGC", "TTTTTT|AAAAAA",
+			},
+		}
+	}
+	return benchDataset{
+		name: "SyntheticGenome-4MB",
+		text: benchSyntheticCorpus(
+			"AGCTTTTCATTCTGACTGCAACGGGCAATATGTCTCTGTGTGGATTAAAAAAAGAGTGTCTGATAGCAGCTTCTGAAC",
+			4*1024*1024,
+		),
+		exactPatterns: []string{
+			"ATGAAACGC", "GTTACCTGCC", "CGCGCG", "TTTTTT", "AGCTTTTC",
+		},
+		regexPatterns: []string{
+			"ATGAAACGC|GTTACCTGCC", "CGCGCG|GCGCGC", "TTTTTT|AAAAAA",
+		},
+	}
+}
+
 // ─── benchmark sections ──────────────────────────────────────────────────────
 
 func runBuildBenchmarks(b *testing.B, ds benchDataset) {
@@ -331,4 +387,28 @@ func BenchmarkSearchRegex_SmallUnder1MB(b *testing.B) {
 
 func BenchmarkSearchRegex_ReasonableSize(b *testing.B) {
 	runRegexSearchBenchmarks(b, loadReasonableDataset())
+}
+
+func BenchmarkBuild_GeneratedLogs(b *testing.B) {
+	runBuildBenchmarks(b, loadGeneratedLogDataset())
+}
+
+func BenchmarkBuild_Genome(b *testing.B) {
+	runBuildBenchmarks(b, loadGenomeDataset())
+}
+
+func BenchmarkSearchExact_GeneratedLogs(b *testing.B) {
+	runExactSearchBenchmarks(b, loadGeneratedLogDataset())
+}
+
+func BenchmarkSearchExact_Genome(b *testing.B) {
+	runExactSearchBenchmarks(b, loadGenomeDataset())
+}
+
+func BenchmarkSearchRegex_GeneratedLogs(b *testing.B) {
+	runRegexSearchBenchmarks(b, loadGeneratedLogDataset())
+}
+
+func BenchmarkSearchRegex_Genome(b *testing.B) {
+	runRegexSearchBenchmarks(b, loadGenomeDataset())
 }
