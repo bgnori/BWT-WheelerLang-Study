@@ -17,9 +17,9 @@ docker compose run bwtsearch search /data/moby_dick.idx "white whale"
 
 ```bash
 make build
-make download-testdata
-make build-index
-make search-demo
+make download-moby-dick
+make build-index-moby-dick
+make search-demo-moby-dick
 ```
 
 ## 詳細ドキュメント

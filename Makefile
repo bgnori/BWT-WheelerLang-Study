@@ -1,4 +1,4 @@
-.PHONY: all build test lint clean download-testdata download-kenshin download-git download-ecoli prepare-ecoli download-osativa-chr1 prepare-osativa-chr1 download-amazon-small prepare-amazon-small download-amazon-medium prepare-amazon-medium download-amazon-large prepare-amazon-large generate-fake-logs generate-fake-log-apache-common generate-fake-log-apache-error generate-fake-log-syslog generate-fake-log-json generate-fake-log-logfmt docker-build docker-run
+.PHONY: all build test lint clean download-moby-dick download-testdata download-kenshin download-git download-ecoli prepare-ecoli download-osativa-chr1 prepare-osativa-chr1 download-amazon-small prepare-amazon-small download-amazon-medium prepare-amazon-medium download-amazon-large prepare-amazon-large build-index-moby-dick build-index build-search-demo search-demo suffixarray-demo-moby-dick suffixarray-demo generate-fake-logs generate-fake-log-apache-common generate-fake-log-apache-error generate-fake-log-syslog generate-fake-log-json generate-fake-log-logfmt docker-build docker-run
 
 BINARY  := bwtsearch
 DATADIR := data
@@ -36,23 +36,35 @@ clean:
 	rm -f $(BINARY)
 	rm -f $(DATADIR)/*.idx $(DATADIR)/*.saidx
 
-## download-testdata: download Project Gutenberg Moby Dick text (not committed)
-download-testdata:
+## download-moby-dick: download Project Gutenberg Moby Dick text (not committed)
+download-moby-dick:
 	@mkdir -p $(DATADIR)
 	./scripts/download_testdata.sh $(DATADIR)
 
-## build-index: build the FM-index from the downloaded Moby Dick text
-build-index: $(DATADIR)/moby_dick.txt
+## backward compatibility alias for the previous name
+download-testdata: download-moby-dick
+
+## build-index-moby-dick: build the FM-index from the downloaded Moby Dick text
+build-index-moby-dick: $(DATADIR)/moby_dick.txt
 	./$(BINARY) build $(DATADIR)/moby_dick.txt $(INDEXFILE)
 
-## search-demo: run a sample search on the Moby Dick index
-search-demo: $(INDEXFILE)
+## backward compatibility alias for the previous name
+build-index: build-index-moby-dick
+
+## search-demo-moby-dick: run a sample search on the Moby Dick index
+search-demo-moby-dick: $(INDEXFILE)
 	./$(BINARY) search --limit 10 $(INDEXFILE) "white whale"
 
-## suffixarray-demo: build and search with stdlib suffix array for comparison
-suffixarray-demo: $(DATADIR)/moby_dick.txt
+## backward compatibility alias for the previous name
+search-demo: search-demo-moby-dick
+
+## suffixarray-demo-moby-dick: build and search with stdlib suffix array for comparison
+suffixarray-demo-moby-dick: $(DATADIR)/moby_dick.txt
 	./$(BINARY) build --algo suffixarray $(DATADIR)/moby_dick.txt $(DATADIR)/moby_dick.saidx
 	./$(BINARY) search --limit 10 $(DATADIR)/moby_dick.saidx "whale"
+
+## backward compatibility alias for the previous name
+suffixarray-demo: suffixarray-demo-moby-dick
 
 ## download-kenshin: download Aozora Bunko 上杉謙信 and convert to UTF-8 (not committed)
 download-kenshin:

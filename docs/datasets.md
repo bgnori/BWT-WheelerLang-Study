@@ -7,9 +7,9 @@
 - ソース: [Project Gutenberg #2701](https://www.gutenberg.org/ebooks/2701)
 
 ```bash
-make download-testdata
-make build-index
-make search-demo
+make download-moby-dick
+make build-index-moby-dick
+make search-demo-moby-dick
 ```
 
 ## 2. 上杉謙信（日本語）
