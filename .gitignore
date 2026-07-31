@@ -45,5 +45,11 @@ data/*.fna
 # Git source code downloaded for indexing tests — must NOT be committed
 data/git-src/
 
+# Kaggle Amazon benchmark data (raw archives/extracted tables) — must NOT be committed
+data/kaggle/
+data/*.csv
+data/*.tsv
+data/*.zip
+
 # Keep the data directory itself (with its .gitkeep placeholder)
 !data/.gitkeep

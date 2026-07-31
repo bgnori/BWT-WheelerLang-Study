@@ -1,4 +1,4 @@
-.PHONY: all build test lint clean download-testdata download-kenshin download-git download-ecoli prepare-ecoli download-osativa-chr1 prepare-osativa-chr1 docker-build docker-run
+.PHONY: all build test lint clean download-testdata download-kenshin download-git download-ecoli prepare-ecoli download-osativa-chr1 prepare-osativa-chr1 download-amazon-small prepare-amazon-small download-amazon-medium prepare-amazon-medium download-amazon-large prepare-amazon-large docker-build docker-run
 
 BINARY  := bwtsearch
 DATADIR := data
@@ -8,6 +8,9 @@ GIT_SRC_DIR := $(DATADIR)/git-src
 GIT_INDEXFILE := $(DATADIR)/git.idx
 ECOLI_INDEXFILE := $(DATADIR)/ecoli.idx
 OSATIVA_CHR1_INDEXFILE := $(DATADIR)/osativa_chr1.idx
+AMAZON_SMALL_TEXT := $(DATADIR)/amazon_small.txt
+AMAZON_MEDIUM_TEXT := $(DATADIR)/amazon_medium.txt
+AMAZON_LARGE_TEXT := $(DATADIR)/amazon_large.txt
 
 all: build
 
@@ -99,6 +102,33 @@ download-osativa-chr1:
 prepare-osativa-chr1: $(DATADIR)/osativa_chr1.fna
 	./scripts/prepare_ecoli.sh $(DATADIR) osativa_chr1.fna osativa_chr1.txt
 
+## download-amazon-small: download Kaggle Amazon Laptop Prices Dataset (not committed)
+download-amazon-small:
+	@mkdir -p $(DATADIR)
+	./scripts/download_kaggle_amazon.sh small $(DATADIR)
+
+## prepare-amazon-small: preprocess Kaggle Amazon Laptop Prices Dataset to plain text
+prepare-amazon-small:
+	./scripts/prepare_kaggle_amazon.sh small $(DATADIR) amazon_small.txt
+
+## download-amazon-medium: download Kaggle Amazon Mobile Dataset (not committed)
+download-amazon-medium:
+	@mkdir -p $(DATADIR)
+	./scripts/download_kaggle_amazon.sh medium $(DATADIR)
+
+## prepare-amazon-medium: preprocess Kaggle Amazon Mobile Dataset to plain text
+prepare-amazon-medium:
+	./scripts/prepare_kaggle_amazon.sh medium $(DATADIR) amazon_medium.txt
+
+## download-amazon-large: download Kaggle Amazon Product Dataset (100K+) (not committed)
+download-amazon-large:
+	@mkdir -p $(DATADIR)
+	./scripts/download_kaggle_amazon.sh large $(DATADIR)
+
+## prepare-amazon-large: preprocess Kaggle Amazon Product Dataset (100K+) to plain text
+prepare-amazon-large:
+	./scripts/prepare_kaggle_amazon.sh large $(DATADIR) amazon_large.txt
+
 ## build-index-git: build the FM-index from the Git source files
 build-index-git: $(GIT_SRC_DIR)
 	find $(GIT_SRC_DIR) -type f \( -name "*.c" -o -name "*.h" \) | sort | \
@@ -130,6 +160,18 @@ suffixarray-demo-ecoli: $(DATADIR)/ecoli.txt
 ## build-index-osativa-chr1: build FM-index from Oryza sativa chr1 genome text
 build-index-osativa-chr1: $(DATADIR)/osativa_chr1.txt
 	./$(BINARY) build --algo sais $(DATADIR)/osativa_chr1.txt $(OSATIVA_CHR1_INDEXFILE)
+
+## build-index-amazon-small: build FM-index from preprocessed Amazon small dataset
+build-index-amazon-small: $(AMAZON_SMALL_TEXT)
+	./$(BINARY) build --algo sais $(AMAZON_SMALL_TEXT) $(DATADIR)/amazon_small.idx
+
+## build-index-amazon-medium: build FM-index from preprocessed Amazon medium dataset
+build-index-amazon-medium: $(AMAZON_MEDIUM_TEXT)
+	./$(BINARY) build --algo sais $(AMAZON_MEDIUM_TEXT) $(DATADIR)/amazon_medium.idx
+
+## build-index-amazon-large: build FM-index from preprocessed Amazon large dataset
+build-index-amazon-large: $(AMAZON_LARGE_TEXT)
+	./$(BINARY) build --algo sais $(AMAZON_LARGE_TEXT) $(DATADIR)/amazon_large.idx
 
 ## search-demo-osativa-chr1: run a sample search on the Oryza sativa chr1 genome index
 search-demo-osativa-chr1: $(OSATIVA_CHR1_INDEXFILE)
