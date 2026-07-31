@@ -340,3 +340,88 @@ func TestSAISDirectSuffixArray(t *testing.T) {
 		}
 	}
 }
+
+// --- Wavelet tree tests ----------------------------------------------------
+
+func TestWaveletMatchesBitvectors(t *testing.T) {
+	texts := []string{
+		"banana",
+		"mississippi",
+		"abracadabra",
+		"the quick brown fox jumps over the lazy dog",
+		"aaaaabbbbbccccc",
+		"aaaaaaaaaa",
+		"",
+	}
+	patterns := []string{"a", "an", "the", "ab", "ccc", "xyz", "aa"}
+
+	for _, textStr := range texts {
+		text := []byte(textStr)
+		idxBV := Build(text)
+		idxWT := BuildWithOptions(text, AlgorithmDoubling, OccWaveletTree)
+
+		for _, pat := range patterns {
+			p := []byte(pat)
+			gotBV := idxBV.Count(p)
+			gotWT := idxWT.Count(p)
+			if gotBV != gotWT {
+				t.Errorf("text=%q pat=%q: bitvectors=%d wavelet=%d", textStr, pat, gotBV, gotWT)
+			}
+			posBV := sortedPositions(idxBV.Locate(p, 0))
+			posWT := sortedPositions(idxWT.Locate(p, 0))
+			if !intSliceEqual(posBV, posWT) {
+				t.Errorf("text=%q pat=%q: bitvectors locate=%v wavelet locate=%v",
+					textStr, pat, posBV, posWT)
+			}
+		}
+	}
+}
+
+func TestWaveletPersistence(t *testing.T) {
+	text := []byte("the quick brown fox jumps over the lazy dog")
+	idx := BuildWithOptions(text, AlgorithmSAIS, OccWaveletTree)
+
+	var buf bytes.Buffer
+	if _, err := idx.WriteTo(&buf); err != nil {
+		t.Fatal("WriteTo:", err)
+	}
+
+	idx2, err := ReadFrom(&buf)
+	if err != nil {
+		t.Fatal("ReadFrom:", err)
+	}
+
+	patterns := []string{"the", "fox", "dog", "quick", "xyz"}
+	for _, pat := range patterns {
+		p := []byte(pat)
+		c1 := idx.Count(p)
+		c2 := idx2.Count(p)
+		if c1 != c2 {
+			t.Errorf("after wavelet persistence, Count(%q): %d vs %d", pat, c1, c2)
+		}
+		pos1 := sortedPositions(idx.Locate(p, 0))
+		pos2 := sortedPositions(idx2.Locate(p, 0))
+		if !intSliceEqual(pos1, pos2) {
+			t.Errorf("after wavelet persistence, Locate(%q): %v vs %v", pat, pos1, pos2)
+		}
+	}
+}
+
+func TestWaveletSAISCombination(t *testing.T) {
+	text := []byte("mississippi")
+	idxWT := BuildWithOptions(text, AlgorithmSAIS, OccWaveletTree)
+	idxBV := BuildWithAlgorithm(text, AlgorithmSAIS)
+
+	patterns := []string{"i", "is", "si", "iss", "miss", "p", "pp", "ippi"}
+	for _, pat := range patterns {
+		p := []byte(pat)
+		if got, want := idxWT.Count(p), idxBV.Count(p); got != want {
+			t.Errorf("Count(%q): wavelet=%d bitvectors=%d", pat, got, want)
+		}
+		posWT := sortedPositions(idxWT.Locate(p, 0))
+		posBV := sortedPositions(idxBV.Locate(p, 0))
+		if !intSliceEqual(posWT, posBV) {
+			t.Errorf("Locate(%q): wavelet=%v bitvectors=%v", pat, posWT, posBV)
+		}
+	}
+}
