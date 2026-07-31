@@ -158,6 +158,45 @@ func TestPersistence(t *testing.T) {
 	}
 }
 
+func TestPersistencePreservesAlgorithmForAppend(t *testing.T) {
+	tests := []struct {
+		name string
+		occ  OccStructure
+	}{
+		{"bitvectors", OccBitvectors},
+		{"wavelet", OccWaveletTree},
+		{"wavelet-matrix", OccWaveletMatrix},
+		{"rlbwt", OccRLBWT},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			idx := BuildWithOptions([]byte("banana"), AlgorithmSAIS, tt.occ)
+			var buf bytes.Buffer
+			if _, err := idx.WriteTo(&buf); err != nil {
+				t.Fatal("WriteTo:", err)
+			}
+
+			loaded, err := ReadFrom(&buf)
+			if err != nil {
+				t.Fatal("ReadFrom:", err)
+			}
+			if loaded.algo != AlgorithmSAIS {
+				t.Fatalf("algorithm after persistence = %d, want AlgorithmSAIS", loaded.algo)
+			}
+			if loaded.typ != tt.occ {
+				t.Fatalf("occ type after persistence = %d, want %d", loaded.typ, tt.occ)
+			}
+
+			loaded.Append([]byte(" bandana"))
+			want := BuildWithOptions([]byte("banana bandana"), AlgorithmSAIS, tt.occ)
+			if !intSliceEqual(sortedPositions(loaded.Locate([]byte("ana"), 0)), sortedPositions(want.Locate([]byte("ana"), 0))) {
+				t.Fatal("Append result differs from an SA-IS rebuild")
+			}
+		})
+	}
+}
+
 func TestBWT(t *testing.T) {
 	// "banana$" sorted suffixes:
 	//   $ a a a b n n  → BWT = annb$aa   (classic result)
