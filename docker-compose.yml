@@ -40,6 +40,23 @@ services:
     volumes:
       - ./data:/data
 
+  # Convenience service that downloads Git v2.45.0 source (.c/.h files) into data/git-src/.
+  download-git:
+    image: alpine:3.19
+    command: >
+      sh -c "apk --no-cache add wget tar &&
+             mkdir -p /data/git-src &&
+             wget -q -O /tmp/git.tar.gz
+               'https://github.com/git/git/archive/refs/tags/v2.45.0.tar.gz' &&
+             tar -xzf /tmp/git.tar.gz -C /tmp &&
+             find /tmp/git-2.45.0 -name '*.c' -o -name '*.h' |
+               xargs -I{} cp {} /data/git-src/ &&
+             rm -rf /tmp/git.tar.gz /tmp/git-2.45.0 &&
+             COUNT=$(find /data/git-src -type f | wc -l) &&
+             echo \"Done: /data/git-src (\${COUNT} files)\""
+    volumes:
+      - ./data:/data
+
   # Convenience service that downloads the E. coli K-12 MG1655 genome from NCBI
   # and converts the FASTA to a plain-text DNA sequence for FM-index testing.
   download-ecoli:
