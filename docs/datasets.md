@@ -58,18 +58,41 @@ make suffixarray-demo-ecoli
 - ソース: [NCBI GenBank Assembly GCA_001433935.1](https://www.ncbi.nlm.nih.gov/datasets/genome/GCA_001433935.1/)
 - `download-osativa` は Oryza sativa 全体のゲノム FASTA を `data/osativa.fna` として取得します。
 - `prepare-osativa-chr1` は `data/osativa.fna` から指定に一致する FASTA レコードだけを抽出し、索引対象の `data/osativa_chr1.txt` を作成します。
+- `prepare-osativa-all` は `data/osativa.fna` の全 FASTA レコード（全 chromosome）を結合し、索引対象の `data/osativa_all.txt` を作成します。
 - 既定の抽出対象は chromosome 1（`AP014957.1`）です。別の FASTA レコードを対象にする場合は `OSATIVA_CHR1_SELECTOR` に awk 拡張正規表現を指定します。
+
+大規模データセットとして使う場合は、次の 2 オプションを選択できます。
+
+- chromosome 1 のみ: サイズを抑えて試行しやすい
+- 全 chromosome: 最大規模で性能評価しやすい
 
 ```bash
 # 1. 全体 FASTA を取得
 make download-osativa
 
-# 2. 指定レコードを抽出して index 対象ファイルを作成
+# 2-A. chromosome 1 を抽出して index 対象ファイルを作成
 make prepare-osativa-chr1
 
-# 3. 抽出済みファイルを索引化して検索
+# 3-A. chr1 抽出済みファイルを索引化して検索
 make build-index-osativa-chr1
 make search-demo-osativa-chr1
+
+# 2-B. 全 chromosome を結合して index 対象ファイルを作成
+make prepare-osativa-all
+
+# 3-B. 全 chromosome 結合済みファイルを索引化して検索
+make build-index-osativa-all
+make search-demo-osativa-all
+
+# 4-B. 全 chromosome で suffix array 比較
+make suffixarray-demo-osativa-all
+
+# 5-B. 全 chromosome で時間計測ベンチ
+make bench-osativa-all
+
+# クエリを変えて検索時間を比較する例
+make time-search-osativa-all-fm OSATIVA_BENCH_QUERY='GTTACCTGCC'
+make time-search-osativa-all-suffixarray OSATIVA_BENCH_QUERY='GTTACCTGCC'
 ```
 
 `download-osativa-chr1` は互換エイリアスとして残していますが、取得されるファイルは chromosome 1 単体ではなく `data/osativa.fna` の全体 FASTA です。

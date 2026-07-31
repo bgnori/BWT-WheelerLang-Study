@@ -1,4 +1,4 @@
-.PHONY: all build test lint clean download-moby-dick download-testdata download-kenshin download-git download-ecoli prepare-ecoli download-osativa download-osativa-chr1 prepare-osativa-chr1 download-amazon-small prepare-amazon-small download-amazon-medium prepare-amazon-medium download-amazon-large prepare-amazon-large build-index-moby-dick build-index build-search-demo search-demo suffixarray-demo-moby-dick suffixarray-demo generate-fake-logs generate-fake-log-apache-common generate-fake-log-apache-error generate-fake-log-syslog generate-fake-log-json generate-fake-log-logfmt docker-build docker-run
+.PHONY: all build test lint clean download-moby-dick download-testdata download-kenshin download-git download-ecoli prepare-ecoli download-osativa download-osativa-chr1 prepare-osativa-chr1 prepare-osativa-all download-amazon-small prepare-amazon-small download-amazon-medium prepare-amazon-medium download-amazon-large prepare-amazon-large build-index-moby-dick build-index build-search-demo search-demo suffixarray-demo-moby-dick suffixarray-demo generate-fake-logs generate-fake-log-apache-common generate-fake-log-apache-error generate-fake-log-syslog generate-fake-log-json generate-fake-log-logfmt docker-build docker-run build-index-osativa-all-suffixarray suffixarray-demo-osativa-all time-build-index-osativa-all-sais time-build-index-osativa-all-suffixarray time-search-osativa-all-fm time-search-osativa-all-suffixarray bench-osativa-all
 
 BINARY  := bwtsearch
 DATADIR := data
@@ -9,7 +9,11 @@ GIT_INDEXFILE := $(DATADIR)/git.idx
 ECOLI_INDEXFILE := $(DATADIR)/ecoli.idx
 OSATIVA_FASTA := $(DATADIR)/osativa.fna
 OSATIVA_CHR1_INDEXFILE := $(DATADIR)/osativa_chr1.idx
+OSATIVA_ALL_TEXT := $(DATADIR)/osativa_all.txt
+OSATIVA_ALL_INDEXFILE := $(DATADIR)/osativa_all.idx
+OSATIVA_ALL_SA_INDEXFILE := $(DATADIR)/osativa_all.saidx
 OSATIVA_CHR1_SELECTOR ?= AP014957[.]1
+OSATIVA_BENCH_QUERY ?= ATGGCG
 AMAZON_SMALL_TEXT := $(DATADIR)/amazon_small.txt
 AMAZON_MEDIUM_TEXT := $(DATADIR)/amazon_medium.txt
 AMAZON_LARGE_TEXT := $(DATADIR)/amazon_large.txt
@@ -109,7 +113,9 @@ prepare-ecoli: $(DATADIR)/ecoli.fna
 	./scripts/prepare_ecoli.sh $(DATADIR)
 
 ## download-osativa: download Oryza sativa genome FASTA from NCBI (not committed)
-download-osativa:
+download-osativa: $(OSATIVA_FASTA)
+
+$(OSATIVA_FASTA):
 	@mkdir -p $(DATADIR)
 	./scripts/download_osativa.sh $(DATADIR)
 
@@ -117,8 +123,16 @@ download-osativa:
 download-osativa-chr1: download-osativa
 
 ## prepare-osativa-chr1: extract Oryza sativa chromosome 1 from the genome FASTA as plain-text DNA
-prepare-osativa-chr1: $(OSATIVA_FASTA)
+prepare-osativa-chr1: $(DATADIR)/osativa_chr1.txt
+
+$(DATADIR)/osativa_chr1.txt: $(OSATIVA_FASTA)
 	./scripts/prepare_fasta_records.sh $(DATADIR) osativa.fna osativa_chr1.txt '$(OSATIVA_CHR1_SELECTOR)'
+
+## prepare-osativa-all: convert all Oryza sativa FASTA records to plain-text DNA
+prepare-osativa-all: $(OSATIVA_ALL_TEXT)
+
+$(OSATIVA_ALL_TEXT): $(OSATIVA_FASTA)
+	./scripts/prepare_fasta_records.sh $(DATADIR) osativa.fna osativa_all.txt '.'
 
 ## download-amazon-small: download Kaggle Amazon Laptop Prices Dataset (not committed)
 download-amazon-small:
@@ -204,8 +218,57 @@ suffixarray-demo-ecoli: $(DATADIR)/ecoli.txt
 	./$(BINARY) search --limit 10 $(DATADIR)/ecoli.saidx "ATGAAACGC"
 
 ## build-index-osativa-chr1: build FM-index from Oryza sativa chr1 genome text
-build-index-osativa-chr1: $(DATADIR)/osativa_chr1.txt
+build-index-osativa-chr1: $(OSATIVA_CHR1_INDEXFILE)
+
+$(OSATIVA_CHR1_INDEXFILE): $(DATADIR)/osativa_chr1.txt
 	./$(BINARY) build --algo sais $(DATADIR)/osativa_chr1.txt $(OSATIVA_CHR1_INDEXFILE)
+
+## build-index-osativa-all: build FM-index from all Oryza sativa chromosomes
+build-index-osativa-all: $(OSATIVA_ALL_INDEXFILE)
+
+$(OSATIVA_ALL_INDEXFILE): $(OSATIVA_ALL_TEXT)
+	./$(BINARY) build --algo sais $(OSATIVA_ALL_TEXT) $(OSATIVA_ALL_INDEXFILE)
+
+## build-index-osativa-all-suffixarray: build stdlib suffix-array index from all Oryza sativa chromosomes
+build-index-osativa-all-suffixarray: $(OSATIVA_ALL_SA_INDEXFILE)
+
+$(OSATIVA_ALL_SA_INDEXFILE): $(OSATIVA_ALL_TEXT)
+	./$(BINARY) build --algo suffixarray $(OSATIVA_ALL_TEXT) $(OSATIVA_ALL_SA_INDEXFILE)
+
+## suffixarray-demo-osativa-all: build and search with stdlib suffix array for all Oryza sativa chromosomes
+suffixarray-demo-osativa-all: $(OSATIVA_ALL_SA_INDEXFILE)
+	./$(BINARY) search --limit 10 $(OSATIVA_ALL_SA_INDEXFILE) "ATGGCG"
+
+## time-build-index-osativa-all-sais: measure build time for FM-index (SA-IS) on all Oryza sativa chromosomes
+time-build-index-osativa-all-sais: $(OSATIVA_ALL_TEXT)
+	@start=$$(date +%s); \
+	./$(BINARY) build --algo sais $(OSATIVA_ALL_TEXT) $(OSATIVA_ALL_INDEXFILE); \
+	end=$$(date +%s); \
+	echo "Elapsed (FM/SAIS): $$((end-start)) sec"
+
+## time-build-index-osativa-all-suffixarray: measure build time for stdlib suffix array on all Oryza sativa chromosomes
+time-build-index-osativa-all-suffixarray: $(OSATIVA_ALL_TEXT)
+	@start=$$(date +%s); \
+	./$(BINARY) build --algo suffixarray $(OSATIVA_ALL_TEXT) $(OSATIVA_ALL_SA_INDEXFILE); \
+	end=$$(date +%s); \
+	echo "Elapsed (Stdlib/SuffixArray): $$((end-start)) sec"
+
+## time-search-osativa-all-fm: measure search time on all Oryza sativa FM-index
+time-search-osativa-all-fm: $(OSATIVA_ALL_INDEXFILE)
+	@start=$$(date +%s); \
+	./$(BINARY) search --limit 10 $(OSATIVA_ALL_INDEXFILE) "$(OSATIVA_BENCH_QUERY)" > /dev/null; \
+	end=$$(date +%s); \
+	echo "Elapsed search (FM/SAIS): $$((end-start)) sec, query=$(OSATIVA_BENCH_QUERY)"
+
+## time-search-osativa-all-suffixarray: measure search time on all Oryza sativa suffix-array index
+time-search-osativa-all-suffixarray: $(OSATIVA_ALL_SA_INDEXFILE)
+	@start=$$(date +%s); \
+	./$(BINARY) search --limit 10 $(OSATIVA_ALL_SA_INDEXFILE) "$(OSATIVA_BENCH_QUERY)" > /dev/null; \
+	end=$$(date +%s); \
+	echo "Elapsed search (Stdlib/SuffixArray): $$((end-start)) sec, query=$(OSATIVA_BENCH_QUERY)"
+
+## bench-osativa-all: run build/search time comparisons for all Oryza sativa chromosomes
+bench-osativa-all: time-build-index-osativa-all-sais time-build-index-osativa-all-suffixarray time-search-osativa-all-fm time-search-osativa-all-suffixarray
 
 ## build-index-amazon-small: build FM-index from preprocessed Amazon small dataset
 build-index-amazon-small: $(AMAZON_SMALL_TEXT)
@@ -222,6 +285,10 @@ build-index-amazon-large: $(AMAZON_LARGE_TEXT)
 ## search-demo-osativa-chr1: run a sample search on the Oryza sativa chr1 genome index
 search-demo-osativa-chr1: $(OSATIVA_CHR1_INDEXFILE)
 	./$(BINARY) search --limit 10 $(OSATIVA_CHR1_INDEXFILE) "ATGGCG"
+
+## search-demo-osativa-all: run a sample search on the all-chromosome Oryza sativa index
+search-demo-osativa-all: $(OSATIVA_ALL_INDEXFILE)
+	./$(BINARY) search --limit 10 $(OSATIVA_ALL_INDEXFILE) "ATGGCG"
 
 help:
 	@grep -E '^## ' Makefile | sed 's/## /  /'
