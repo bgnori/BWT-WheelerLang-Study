@@ -70,6 +70,18 @@ const (
 	// Indexes built with this option are written in the FMIDX02 on-disk
 	// format.
 	OccWaveletTree OccStructure = OccStructure(fmindex.OccWaveletTree)
+	// OccWaveletMatrix uses a Wavelet Matrix over the BWT.  It provides the
+	// same O(log σ) rank complexity as OccWaveletTree but with a flat,
+	// cache-friendly memory layout.  Indexes built with this option use the
+	// FMIDX03 on-disk format.
+	OccWaveletMatrix OccStructure = OccStructure(fmindex.OccWaveletMatrix)
+	// OccRLBWT uses a run-length encoded BWT for rank queries.  The BWT is
+	// stored as a compact sequence of equal-character runs, which is the
+	// foundation of r-index style compressed indexes.  Rank queries run in
+	// O(log r) time where r is the number of BWT runs.  This is
+	// space-efficient for highly repetitive texts.
+	// Indexes built with this option use the FMIDX04 on-disk format.
+	OccRLBWT OccStructure = OccStructure(fmindex.OccRLBWT)
 )
 
 // Interval is a half-open suffix-array range [Lo, Hi).
@@ -153,6 +165,39 @@ func BuildWithOptions(text []byte, algo SuffixArrayAlgorithm, occ OccStructure) 
 	return &Index{inner: fmindex.BuildWithOptions(text, fmindex.SuffixArrayAlgorithm(algo), fmindex.OccStructure(occ))}
 }
 
+// BuildFromFilesWithOptions concatenates texts with separator and builds a
+// single FM-index using the specified algorithm and occurrence-array structure.
+// If separator is nil a newline (\n) is used. The separator must not contain
+// 0x00, which is reserved as the FM-index sentinel.
+//
+// BuildFromFilesWithOptions panics if separator contains the byte 0x00.
+func BuildFromFilesWithOptions(texts [][]byte, separator []byte, algo SuffixArrayAlgorithm, occ OccStructure) *Index {
+	if separator == nil {
+		separator = []byte{'\n'}
+	}
+	for _, b := range separator {
+		if b == 0x00 {
+			panic("bwtsearch: separator must not contain 0x00 (reserved as sentinel)")
+		}
+	}
+	if len(texts) == 0 {
+		return BuildWithOptions(nil, algo, occ)
+	}
+	total := 0
+	for _, t := range texts {
+		total += len(t)
+	}
+	total += len(separator) * (len(texts) - 1)
+	combined := make([]byte, 0, total)
+	for i, t := range texts {
+		if i > 0 {
+			combined = append(combined, separator...)
+		}
+		combined = append(combined, t...)
+	}
+	return BuildWithOptions(combined, algo, occ)
+}
+
 // ReadFrom deserialises an index from r.
 func ReadFrom(r io.Reader) (*Index, error) {
 	inner, err := fmindex.ReadFrom(r)
@@ -206,6 +251,14 @@ func (idx *Index) SAAt(i int) int { return idx.inner.SAAt(i) }
 
 // AlphabetSize returns the number of distinct characters in the text.
 func (idx *Index) AlphabetSize() int { return idx.inner.AlphabetSize() }
+
+// NumBWTRuns returns the number of equal-character runs in the BWT.
+// This is the r parameter of the r-index: smaller values indicate more
+// repetitive texts and a more compact RLBWT representation.
+func (idx *Index) NumBWTRuns() int { return idx.inner.NumBWTRuns() }
+
+// OccType returns the occurrence-array structure used by this index.
+func (idx *Index) OccType() OccStructure { return OccStructure(idx.inner.OccType()) }
 
 // BWT returns a copy of the Burrows-Wheeler Transform.
 func (idx *Index) BWT() []byte { return idx.inner.BWT() }

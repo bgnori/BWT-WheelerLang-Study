@@ -2,7 +2,9 @@ package fmindex
 
 import (
 	"github.com/bgnori/bwt-wheelerlang-study/internal/bitvector"
+	"github.com/bgnori/bwt-wheelerlang-study/internal/rindex"
 	"github.com/bgnori/bwt-wheelerlang-study/internal/wavelet"
+	"github.com/bgnori/bwt-wheelerlang-study/internal/waveletmatrix"
 )
 
 // OccStructure selects the occurrence-array implementation used inside an
@@ -17,6 +19,17 @@ const (
 	// rank queries and O(n log σ) total space.  Indexes built with this
 	// option are written in the FMIDX02 on-disk format.
 	OccWaveletTree
+	// OccWaveletMatrix uses a Wavelet Matrix over the BWT.  It provides the
+	// same O(log σ) rank complexity as OccWaveletTree but with a flat,
+	// cache-friendly memory layout.  Indexes built with this option use the
+	// FMIDX03 on-disk format.
+	OccWaveletMatrix
+	// OccRLBWT uses a run-length encoded BWT (RLBWT) for rank queries.  The
+	// BWT is stored as a compact sequence of (character, length) run pairs,
+	// the foundation of r-index style compressed indexes.  Rank queries run
+	// in O(log r) time where r is the number of BWT runs.  Indexes built
+	// with this option use the FMIDX04 on-disk format.
+	OccRLBWT
 )
 
 // occStructure is the internal interface for occurrence-array implementations.
@@ -29,6 +42,10 @@ func buildOcc(bwt []byte, typ OccStructure) occStructure {
 	switch typ {
 	case OccWaveletTree:
 		return &waveletOcc{tree: wavelet.Build(bwt)}
+	case OccWaveletMatrix:
+		return &waveletMatrixOcc{mat: waveletmatrix.Build(bwt)}
+	case OccRLBWT:
+		return &rlbwtOcc{rl: rindex.Build(bwt)}
 	default:
 		return buildBitvecOcc(bwt)
 	}
@@ -74,4 +91,31 @@ type waveletOcc struct {
 
 func (o *waveletOcc) rank(b byte, i int) int {
 	return o.tree.Rank(b, i)
+}
+
+// ── waveletMatrixOcc ──────────────────────────────────────────────────────────
+
+// waveletMatrixOcc implements occStructure using a Wavelet Matrix.
+type waveletMatrixOcc struct {
+	mat *waveletmatrix.Matrix
+}
+
+func (o *waveletMatrixOcc) rank(b byte, i int) int {
+	return o.mat.Rank(b, i)
+}
+
+// ── rlbwtOcc ──────────────────────────────────────────────────────────────────
+
+// rlbwtOcc implements occStructure using a run-length encoded BWT (RLBWT).
+type rlbwtOcc struct {
+	rl *rindex.RLBWT
+}
+
+func (o *rlbwtOcc) rank(b byte, i int) int {
+	return o.rl.Rank(b, i)
+}
+
+// numRuns returns the number of BWT runs stored in the RLBWT.
+func (o *rlbwtOcc) numRuns() int {
+	return o.rl.NumRuns()
 }

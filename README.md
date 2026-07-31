@@ -1,6 +1,6 @@
 # BWT-WheelerLang-Study
 
-全文検索アルゴリズムの理解と評価：FM-index（Wheeler グラフ）の実装と Go 標準ライブラリ `index/suffixarray` との機能比較。
+全文検索アルゴリズムの理解と評価：FM-index（Wheeler グラフ）の実装と Go 標準ライブラリ `index/suffixarray` を統一インターフェースで選択・比較。
 
 ## 概要
 
@@ -10,7 +10,7 @@
 - **ビットベクトルインデックス**：ランク演算（Rank1/Rank0）を O(1) でサポートする簡潔データ構造で、FM-index の Occ 配列を実現します。
 - **星なし正規表現検索**：Kleene スターを含まない正規表現（星なし言語）によるパターン検索。制限を超えるクエリにはエラーメッセージを返します。
 - **インデックスの永続化**：インデックスをバイナリファイルに保存・読み込みする機能。
-- **標準ライブラリとの比較**：Go の `index/suffixarray` と件数・速度を比較する `compare` コマンド。
+- **標準ライブラリの Suffix Array**：`--algo suffixarray` オプションで Go の `index/suffixarray` バックエンドを選択できます。FM-index と同一の CLI インターフェースで使用でき、リテラル文字列検索に対応します（正規表現クエリは非対応）。
 
 ## ライブラリとして使う
 
@@ -25,10 +25,12 @@ import bwtsearch "github.com/bgnori/bwt-wheelerlang-study"
 - `bwtsearch.Build`, `bwtsearch.BuildWithAlgorithm`, `bwtsearch.BuildWithOptions`, `bwtsearch.BuildFromFiles`
 - `bwtsearch.Load`, `bwtsearch.ReadFrom`
 - `(*bwtsearch.Index).Save`, `(*bwtsearch.Index).WriteTo`, `(*bwtsearch.Index).Append`, `(*bwtsearch.Index).Count`, `(*bwtsearch.Index).Locate`
+- `bwtsearch.BuildStdlib`, `bwtsearch.BuildStdlibFromFiles`
+- `(*bwtsearch.StdlibIndex).Save`, `(*bwtsearch.StdlibIndex).WriteTo`, `(*bwtsearch.StdlibIndex).Count`, `(*bwtsearch.StdlibIndex).Locate`
+- `bwtsearch.LoadStdlib`, `bwtsearch.ReadStdlibFrom`
 - `bwtsearch.Check`, `bwtsearch.Search`（星なし正規表現検索）
-- エラー型: `bwtsearch.ViolationError`（星なし制約違反）、`bwtsearch.UnsupportedError`（非対応構文）
 
-詳細は `docs/library_api.md` を参照してください。
+- エラー型: `bwtsearch.ViolationError`（星なし制約違反）、`bwtsearch.UnsupportedError`（非対応構文）
 
 ---
 
@@ -85,9 +87,6 @@ make build-index
 
 # サンプル検索
 make search-demo
-
-# FM-index vs 標準ライブラリの比較
-make compare-demo
 ```
 
 ---
@@ -97,10 +96,50 @@ make compare-demo
 ### `build` — インデックス構築
 
 ```
-bwtsearch build <input-file> <index-file>
+bwtsearch build [--algo doubling|sais|suffixarray] [--occ bitvectors|wavelet] <input-file> <index-file>
 ```
 
-テキストファイルから FM-index を構築し、バイナリ形式でファイルに保存します。
+テキストファイルからインデックスを構築し、バイナリ形式でファイルに保存します。
+
+- `--algo`: 接尾辞配列の構築アルゴリズム（既定値 `doubling`）
+  - `doubling`: 前置倍加法（Manber-Myers）。シンプルで安定。FM-index を構築します。
+  - `sais`: SA-IS アルゴリズム。大規模テキストで高速。FM-index を構築します。
+  - `suffixarray`: Go 標準ライブラリ `index/suffixarray` を使用。リテラル検索専用。正規表現クエリは非対応。
+- `--occ`: Occ 配列の実装（既定値 `bitvectors`）
+  - `bitvectors`: 文字ごとの簡潔ビットベクトル。アルファベットが小さい場合に有利。
+  - `wavelet`: ウェーブレット木。アルファベットが大きい（バイト値の種類が多い）テキストで有利。
+
+**例：**
+
+```bash
+# デフォルト設定（前置倍加 + ビットベクトル）
+bwtsearch build data/moby_dick.txt data/moby_dick.idx
+
+# SA-IS アルゴリズムを使用
+bwtsearch build --algo sais data/moby_dick.txt data/moby_dick.idx
+
+# SA-IS + ウェーブレット木を使用
+bwtsearch build --algo sais --occ wavelet data/moby_dick.txt data/moby_dick.idx
+
+# Go 標準ライブラリの Suffix Array を使用（リテラル検索専用）
+bwtsearch build --algo suffixarray data/moby_dick.txt data/moby_dick.saidx
+```
+
+### `build-multi` — 複数ファイルからインデックス構築
+
+```
+bwtsearch build-multi [--algo doubling|sais|suffixarray] [--occ bitvectors|wavelet] <index-file> <file1> [file2 ...]
+```
+
+複数のテキストファイルを結合して FM-index を構築します。ファイルの区切りには改行（`\n`）が使われます。
+
+- `--algo`/`--occ` オプションは `build` コマンドと同じです。
+
+**例：**
+
+```bash
+bwtsearch build-multi --algo sais data/combined.idx data/file1.txt data/file2.txt
+```
 
 ### `info` — インデックス情報表示
 
@@ -137,7 +176,7 @@ bwtsearch browse <index-file> [--show N] [--context N]
 
 端末でインタラクティブに接尾辞配列を探索します。文字を入力するたびに検索結果が絞り込まれます。Backspace で削除、空 Enter で終了。
 
-### `search` — 星なし正規表現検索
+### `search` — 検索
 
 ```
 bwtsearch search [flags] <index-file> <pattern>
@@ -146,7 +185,12 @@ bwtsearch search [flags] <index-file> <pattern>
   --positions    テキスト位置のみ表示
 ```
 
-**サポートする演算子：**
+インデックスのバックエンドに応じて自動的に検索方式を選択します。
+
+- **FM-index**（`--algo doubling` または `--algo sais` で構築）：星なし正規表現によるパターン検索。
+- **Suffix Array**（`--algo suffixarray` で構築）：リテラル文字列検索のみ。正規表現クエリは非対応。
+
+**FM-index でサポートする演算子：**
 
 | 構文          | 意味                       | 星なし言語内？ |
 |---------------|---------------------------|----------------|
@@ -166,27 +210,22 @@ bwtsearch search [flags] <index-file> <pattern>
 **例：**
 
 ```bash
-# リテラル検索
+# リテラル検索（FM-index・Suffix Array どちらでも可）
 bwtsearch search --limit 20 moby.idx "white whale"
 
-# 選択
+# 選択（FM-index のみ）
 bwtsearch search --limit 10 moby.idx "whale|ship"
 
-# 文字クラス
+# 文字クラス（FM-index のみ）
 bwtsearch search moby.idx "[Ww]hale"
 
-# 星なし言語を超えるクエリ（エラーになる例）
+# 星なし言語を超えるクエリ（FM-index でエラーになる例）
 bwtsearch search moby.idx "wha.*"
 # → Pattern rejected: star-free violation: ".*" uses Kleene star (*)...
-```
 
-### `compare` — 標準ライブラリとの比較
-
+# Suffix Array インデックスに対するリテラル検索
+bwtsearch search --limit 20 moby.saidx "white whale"
 ```
-bwtsearch compare <input-file> <pattern> [--limit N]
-```
-
-同一テキストに対して FM-index と Go 標準の `index/suffixarray` を実行し、件数と処理時間を比較します。
 
 ### `web` — 検索を試せる簡易 Web アプリ
 
@@ -194,7 +233,7 @@ bwtsearch compare <input-file> <pattern> [--limit N]
 bwtsearch web [--index FILE] [--addr ADDR] [--limit N] [--context N] [--min-chars N]
 ```
 
-インデックスを読み込んでローカル HTTP サーバーを起動し、ブラウザ上で星なし正規表現検索を試せます。
+インデックスを読み込んでローカル HTTP サーバーを起動し、ブラウザ上で検索を試せます。FM-index バックエンドの場合は星なし正規表現検索が可能です。
 
 - `--index FILE`: 読み込むインデックス（既定値 `data/moby_dick.idx`）
 - `--addr ADDR`: 待ち受けアドレス（既定値 `:8080`）
@@ -246,9 +285,6 @@ make build-index-kenshin
 
 # 3. サンプル検索（「上杉謙信」をリテラル検索）
 make search-demo-kenshin
-
-# 4. FM-index vs 標準ライブラリの比較
-make compare-demo-kenshin
 ```
 
 直接 CLI で操作する場合:
@@ -348,6 +384,110 @@ find data/git-src -type f \( -name "*.c" -o -name "*.h" \) | sort | \
 # 検索
 docker compose run bwtsearch search /data/git.idx "commit"
 ```
+
+### E. coli K-12 MG1655 / イネ第1染色体（ゲノムデータサンプル）
+
+[NCBI RefSeq NC_000913.3](https://www.ncbi.nlm.nih.gov/nuccore/NC_000913.3) — 大腸菌（*Escherichia coli*）K-12 株 MG1655 の完全ゲノム（約 4.6 Mbp）を使用します。
+データソースは NCBI FTP（Assembly: GCF_000005845.2, ASM584v2）です。
+
+ゲノムデータは **FASTA 形式**（`.fna`）で配布されています。FM-index に取り込む前に、FASTA ヘッダ行（`>` で始まる行）を除去し、塩基配列を大文字化・結合した平文テキスト（`.txt`）に変換する必要があります。
+この前処理は `prepare_ecoli.sh` を使い回しでき、入力/出力ファイル名を切り替えるだけで他の FASTA にも適用できます。
+
+#### ローカル（Go）での手順
+
+```bash
+# 1. FASTA ファイルをダウンロード → data/ecoli.fna
+make download-ecoli
+
+# 2. FASTA を平文 DNA テキストに変換 → data/ecoli.txt
+make prepare-ecoli
+
+# 3. FM-index を構築（大規模入力のため SA-IS を推奨）
+make build-index-ecoli
+
+# 4. サンプル検索
+make search-demo-ecoli
+```
+
+直接スクリプト・CLI で操作する場合:
+
+```bash
+# FASTA ダウンロード
+./scripts/download_ecoli.sh
+
+# FASTA → 平文 DNA 変換
+./scripts/prepare_ecoli.sh
+
+# FM-index 構築
+./bwtsearch build --algo sais data/ecoli.txt data/ecoli.idx
+
+# 検索（例：開始コドン周辺の典型的なパターン）
+./bwtsearch search data/ecoli.idx "ATGAAACGC" --limit 10
+
+# インデックス情報
+./bwtsearch info data/ecoli.idx
+```
+
+### Oryza sativa（イネ）第1染色体
+
+[NCBI GenBank Assembly GCA_001433935.1 (IRGSP-1.0)](https://www.ncbi.nlm.nih.gov/datasets/genome/GCA_001433935.1/) の第1染色体 FASTA（約 43.3MB〜45MB）を使用できます。
+
+```bash
+# 1. FASTA ファイルをダウンロード → data/osativa_chr1.fna
+make download-osativa-chr1
+
+# 2. FASTA を平文 DNA テキストに変換（既存スクリプトを再利用）→ data/osativa_chr1.txt
+make prepare-osativa-chr1
+
+# 3. FM-index を構築（大規模入力のため SA-IS を推奨）
+make build-index-osativa-chr1
+
+# 4. サンプル検索
+make search-demo-osativa-chr1
+```
+
+直接スクリプト・CLI で操作する場合:
+
+```bash
+./scripts/download_osativa_chr1.sh
+./scripts/prepare_ecoli.sh ./data osativa_chr1.fna osativa_chr1.txt
+./bwtsearch build --algo sais data/osativa_chr1.txt data/osativa_chr1.idx
+./bwtsearch search data/osativa_chr1.idx "ATGGCG" --limit 10
+./bwtsearch info data/osativa_chr1.idx
+```
+
+#### Docker での手順
+
+```bash
+# イメージをビルド
+docker compose build
+
+# FASTA ダウンロード＆変換（ecoli.fna と ecoli.txt を生成）
+docker compose run download-ecoli
+
+# FM-index を構築
+docker compose run bwtsearch build --algo sais /data/ecoli.txt /data/ecoli.idx
+
+# 検索
+docker compose run bwtsearch search /data/ecoli.idx "ATGAAACGC"
+
+# イネ第1染色体の FASTA ダウンロード＆変換（osativa_chr1.fna と osativa_chr1.txt を生成）
+docker compose run download-osativa-chr1
+
+# イネ第1染色体インデックスを構築
+docker compose run bwtsearch build --algo sais /data/osativa_chr1.txt /data/osativa_chr1.idx
+```
+
+#### ゲノムデータ処理の注意点
+
+- **FASTA 形式**: ヘッダ行（`>`）と塩基配列行が交互に並ぶテキスト形式です。`prepare_ecoli.sh` がヘッダを除去し、各レコードの配列を 1 行に結合して大文字化します。
+- **文字セット**: E. coli ゲノムは A/C/G/T/N（不明塩基）のみで構成されます。すべて ASCII 1 バイトなので FM-index にそのまま取り込めます。
+- **大規模テキスト**: 約 4.6 MB・460 万文字の連続バイト列です。インデックス構築には `--algo sais`（SA-IS アルゴリズム）を推奨します。
+- **植物ゲノムの反復配列**: イネを含む植物ゲノムは反復配列が多く、BWT ラン分布や検索ヒット分布が偏りやすいため、インデックス生成時間・メモリ使用量・検索時の候補数に影響が出やすい点に注意してください。
+- **ゼロバイト**: FM-index はゼロバイト（0x00）を番兵として使用します。通常の FASTA 塩基配列にゼロバイトは含まれません。
+- **`.fna` ファイル**: ダウンロードされた生 FASTA ファイル（`data/ecoli.fna`）も `.gitignore` で除外されています。コミットしないでください。
+
+> **注意：** FASTA ファイル（`data/*.fna`）・平文テキスト（`data/*.txt`）・インデックス（`data/*.idx`）はすべて `.gitignore` に登録されており、リポジトリにはコミットしないでください。
 
 ### Git LFS について
 
