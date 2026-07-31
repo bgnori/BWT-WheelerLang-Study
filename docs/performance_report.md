@@ -165,6 +165,8 @@
 
 | データセット | 手法 | elapsed_sec | peak_rss_kb | index_bytes |
 |---|---|---:|---:|---:|
+| MobyDick | FM/SAIS | 0.597 | 94,252 | 25,848,838 |
+| MobyDick | Stdlib/SuffixArray | 0.350 | 16,540 | 6,367,158 |
 | Kenshin | FM/SAIS | 0.158 | 35,536 | 8,831,512 |
 | Kenshin | Stdlib/SuffixArray | 0.124 | 10,636 | 2,204,893 |
 | GitSource | FM/SAIS | 7.889 | 574,916 | 216,694,136 |
@@ -173,6 +175,13 @@
 | Ecoli | Stdlib/SuffixArray | 1.340 | 37,712 | 25,746,339 |
 | OsativaChr1 | FM/SAIS | 31.381 | 2,329,996 | 297,490,092 |
 | OsativaChr1 | Stdlib/SuffixArray | 24.428 | 266,960 | 257,616,375 |
+
+### 検索時メトリクス（代表クエリ: `white whale`）
+
+| データセット | 手法 | elapsed_sec | peak_rss_kb |
+|---|---|---:|---:|
+| MobyDick | FM/SAIS | 0.069 | 48,184 |
+| MobyDick | Stdlib/SuffixArray | 0.084 | 14,916 |
 
 ---
 
@@ -183,3 +192,4 @@
 - **検索速度（正規表現）**: `Bitvectors` と `RLBWT` が近い性能で、`WaveletTree/Matrix` は遅め。
 - **FM vs Stdlib（go test）**: 構築では stdlib が有利だが、検索（特にログ系）では FM 系が大幅に高速。
 - **FM vs Stdlib（CLI 実測）**: FM/SAIS はインデックスサイズとピークRSSが大きくなる一方、データセットによっては検索時に有利（例: OsativaChr1）。
+- **MobyDick（CLI 実測）**: 構築は stdlib が軽量（6.3MB index, 16MB級RSS）で、検索は FM/SAIS がわずかに高速（0.069s vs 0.084s）。
