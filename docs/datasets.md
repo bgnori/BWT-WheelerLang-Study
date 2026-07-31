@@ -87,10 +87,10 @@ make search-demo-osativa-all
 # 4-B. 全 chromosome で suffix array 比較
 make suffixarray-demo-osativa-all
 
-# 5-B. 全 chromosome で時間計測ベンチ
+# 5-B. 全 chromosome で性能計測ベンチ（時間・メモリ・インデックスサイズ）
 make bench-osativa-all
 
-# クエリを変えて検索時間を比較する例
+# クエリを変えて検索時間・メモリを比較する例
 make time-search-osativa-all-fm OSATIVA_BENCH_QUERY='GTTACCTGCC'
 make time-search-osativa-all-suffixarray OSATIVA_BENCH_QUERY='GTTACCTGCC'
 ```
@@ -160,6 +160,39 @@ make generate-fake-log-logfmt FAKE_LOG_SIZE=5M
 ```
 
 `flog` / `mclogs` コマンドが必要です。
+
+## 8. 全データセット一括ベンチ（時間・メモリ・インデックスサイズ）
+
+全データセットを一括で測定するには以下を実行します。
+
+```bash
+make bench-all-datasets
+```
+
+外部依存の有無で分けて実行する場合:
+
+```bash
+# 外部依存なし（Kaggle/flog/mclogs 不要）
+make bench-all-datasets-local
+
+# 外部依存あり（Kaggle + flog/mclogs が必要）
+make bench-all-datasets-external
+```
+
+個別に実行したい場合:
+
+```bash
+make bench-moby-dick
+make bench-kenshin
+make bench-git
+make bench-ecoli
+make bench-osativa-chr1
+make bench-osativa-all
+make bench-amazon-small
+make bench-amazon-medium
+make bench-amazon-large
+make bench-fake-logs
+```
 
 ## Docker での利用
 
