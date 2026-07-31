@@ -61,26 +61,26 @@ type OccStructure int
 
 const (
 	// OccBitvectors uses one succinct bit-vector per distinct character
-	// (default).  Indexes built with this option are written in the
-	// FMIDX01 on-disk format for backward compatibility.
+	// (default).  Indexes built with this option are written in the FMIDX05
+	// on-disk format.
 	OccBitvectors OccStructure = OccStructure(fmindex.OccBitvectors)
 	// OccWaveletTree uses a Wavelet Tree over the BWT, providing O(log σ)
 	// rank queries and O(n log σ) total space.  This is advantageous when
 	// the alphabet is large or nearly all 256 byte values appear.
-	// Indexes built with this option are written in the FMIDX02 on-disk
+	// Indexes built with this option are written in the FMIDX06 on-disk
 	// format.
 	OccWaveletTree OccStructure = OccStructure(fmindex.OccWaveletTree)
 	// OccWaveletMatrix uses a Wavelet Matrix over the BWT.  It provides the
 	// same O(log σ) rank complexity as OccWaveletTree but with a flat,
 	// cache-friendly memory layout.  Indexes built with this option use the
-	// FMIDX03 on-disk format.
+	// FMIDX07 on-disk format.
 	OccWaveletMatrix OccStructure = OccStructure(fmindex.OccWaveletMatrix)
 	// OccRLBWT uses a run-length encoded BWT for rank queries.  The BWT is
 	// stored as a compact sequence of equal-character runs, which is the
 	// foundation of r-index style compressed indexes.  Rank queries run in
 	// O(log r) time where r is the number of BWT runs.  This is
 	// space-efficient for highly repetitive texts.
-	// Indexes built with this option use the FMIDX04 on-disk format.
+	// Indexes built with this option use the FMIDX08 on-disk format.
 	OccRLBWT OccStructure = OccStructure(fmindex.OccRLBWT)
 )
 
