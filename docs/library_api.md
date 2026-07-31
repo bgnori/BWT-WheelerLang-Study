@@ -80,3 +80,9 @@ func main() {
 ## 複数ファイル入力
 
 `BuildFromFiles*` / `BuildStdlibFromFiles` / `BuildBiFromFiles*` は、`separator=nil` の場合に改行 (`\n`) 連結を使います。separator に `0x00` を含めることはできません。
+
+## 永続化形式
+
+`Save` / `WriteTo` は Occ 構造に応じて `FMIDX05`（bitvectors）、`FMIDX06`（Wavelet Tree）、
+`FMIDX07`（Wavelet Matrix）、`FMIDX08`（RLBWT）を使用し、構築時の suffix-array
+アルゴリズムも保存します。`FMIDX01`〜`FMIDX04` は従来どおり doubling として読み込まれます。

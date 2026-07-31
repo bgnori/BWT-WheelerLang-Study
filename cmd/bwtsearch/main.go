@@ -77,10 +77,10 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  --algo doubling|sais      FM-index with doubling or SA-IS suffix array")
 	fmt.Fprintln(os.Stderr, "  --algo suffixarray        stdlib suffix array (literal patterns only)")
 	fmt.Fprintln(os.Stderr, "  --algo bifmindex          bidirectional FM-index (--occ applies)")
-	fmt.Fprintln(os.Stderr, "  --occ bitvectors          per-character bit-vectors (default, FMIDX01)")
-	fmt.Fprintln(os.Stderr, "  --occ wavelet             Wavelet Tree (FMIDX02)")
-	fmt.Fprintln(os.Stderr, "  --occ waveletmatrix       Wavelet Matrix (FMIDX03)")
-	fmt.Fprintln(os.Stderr, "  --occ rlbwt               run-length BWT / r-index (FMIDX04)")
+	fmt.Fprintln(os.Stderr, "  --occ bitvectors          per-character bit-vectors (default, FMIDX05)")
+	fmt.Fprintln(os.Stderr, "  --occ wavelet             Wavelet Tree (FMIDX06)")
+	fmt.Fprintln(os.Stderr, "  --occ waveletmatrix       Wavelet Matrix (FMIDX07)")
+	fmt.Fprintln(os.Stderr, "  --occ rlbwt               run-length BWT / r-index (FMIDX08)")
 }
 
 func runBuild(args []string) error {
@@ -573,8 +573,8 @@ func parseOcc(s string) (bwtsearch.OccStructure, error) {
 }
 
 // loadAnyIndex opens path and returns the appropriate index type based on the
-// on-disk magic: FMIDX01/02/03/04 for FM-index variants, SAIDX01 for stdlib
-// suffix array, BIDX001 for bidirectional FM-index.
+// on-disk magic: FMIDX01 through FMIDX08 for FM-index variants, SAIDX01 for
+// stdlib suffix array, BIDX001 for bidirectional FM-index.
 func loadAnyIndex(path string) (anyIndex, error) {
 	f, err := os.Open(path)
 	if err != nil {
