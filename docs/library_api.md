@@ -15,6 +15,7 @@ The package also includes executable `go doc` examples in `example_test.go`.
 - `(*Index).Count`, `(*Index).Locate`, `(*Index).ContextAround`
 - `Search` and `Check` for star-free regex search
 - `ViolationError` — returned when a pattern violates the star-free constraint
+- `UnsupportedError` — returned when a syntactically valid regex construct is unsupported
 - `WheelerGraphMermaid` for graph visualization
 
 ## Install
@@ -87,6 +88,8 @@ fmt.Println("total:", res.TotalCount, "positions:", positions)
 ```
 
 Patterns with `*`, `+`, or `{n,}` are rejected and return a `*ViolationError`.
+Position anchors (`^`, `$`, `\b`, `\B`) are not supported by FM-index backward
+search and return a `*UnsupportedError` instead of being silently ignored.
 
 ## Choose suffix-array algorithm
 
@@ -121,5 +124,6 @@ fmt.Println(graph)
 | Condition | Error type |
 |---|---|
 | Pattern uses `*`, `+`, or `{n,}` | `*bwtsearch.ViolationError` |
+| Pattern uses anchors (`^`, `$`, `\b`, `\B`) | `*bwtsearch.UnsupportedError` |
 | Pattern has invalid regex syntax | wrapped `*syntax.Error` from `regexp/syntax` |
 | `nil` Index passed to Search | plain `error` string |
