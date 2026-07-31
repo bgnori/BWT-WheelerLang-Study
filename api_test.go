@@ -102,6 +102,10 @@ func TestNilIndexErrors(t *testing.T) {
 		t.Fatal("expected error for nil index")
 	}
 
+	if err := (*Index)(nil).Append([]byte("x")); err == nil {
+		t.Fatal("expected error appending to nil index")
+	}
+
 	var idx *Index
 	var buf bytes.Buffer
 	if _, err := idx.WriteTo(&buf); err == nil {
@@ -148,5 +152,28 @@ func TestBuildWithOptionsWaveletPersistence(t *testing.T) {
 	}
 	if got := loaded.Count([]byte("abra")); got != 2 {
 		t.Fatalf("Count after reload = %d, want 2", got)
+	}
+}
+
+func TestPublicAppend(t *testing.T) {
+	idx := Build([]byte("hello"))
+	if err := idx.Append([]byte(" world")); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
+	if got := idx.Count([]byte("hello world")); got != 1 {
+		t.Fatalf("Count(hello world) = %d, want 1", got)
+	}
+	if got := idx.Count([]byte("world")); got != 1 {
+		t.Fatalf("Count(world) = %d, want 1", got)
+	}
+}
+
+func TestPublicAppendWavelet(t *testing.T) {
+	idx := BuildWithOptions([]byte("abc"), AlgorithmSAIS, OccWaveletTree)
+	if err := idx.Append([]byte("defabc")); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
+	if got := idx.Count([]byte("abc")); got != 2 {
+		t.Fatalf("Count(abc) = %d, want 2", got)
 	}
 }

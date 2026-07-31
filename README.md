@@ -24,7 +24,7 @@ import bwtsearch "github.com/bgnori/bwt-wheelerlang-study"
 
 - `bwtsearch.Build`, `bwtsearch.BuildWithAlgorithm`
 - `bwtsearch.Load`, `bwtsearch.ReadFrom`
-- `(*bwtsearch.Index).Save`, `(*bwtsearch.Index).Count`, `(*bwtsearch.Index).Locate`
+- `(*bwtsearch.Index).Save`, `(*bwtsearch.Index).Append`, `(*bwtsearch.Index).Count`, `(*bwtsearch.Index).Locate`
 - `bwtsearch.Check`, `bwtsearch.Search`（星なし正規表現検索）
 
 詳細は `docs/library_api.md` を参照してください。

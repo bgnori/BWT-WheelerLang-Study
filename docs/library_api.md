@@ -12,7 +12,7 @@ The package also includes executable `go doc` examples in `example_test.go`.
 - `Build`, `BuildWithAlgorithm`, `BuildFromFiles`
 - `Load`, `ReadFrom`
 - `(*Index).Save`, `(*Index).WriteTo`
-- `(*Index).Count`, `(*Index).Locate`, `(*Index).ContextAround`
+- `(*Index).Append`, `(*Index).Count`, `(*Index).Locate`, `(*Index).ContextAround`
 - `Search` and `Check` for star-free regex search
 - `ViolationError` — returned when a pattern violates the star-free constraint
 - `UnsupportedError` — returned when a syntactically valid regex construct is unsupported
@@ -69,6 +69,17 @@ fmt.Println(idx.Count([]byte("world"))) // 2
 
 A `nil` separator defaults to `"\n"`.  The separator must not contain `0x00`
 (reserved as the FM-index sentinel).
+
+## Incremental update (RopeBWT style)
+
+`Append` extends an existing index with additional bytes while preserving the
+original build options (suffix-array algorithm and occurrence structure).
+
+```go
+idx := bwtsearch.BuildWithOptions([]byte("hello"), bwtsearch.AlgorithmSAIS, bwtsearch.OccWaveletTree)
+_ = idx.Append([]byte(" world"))
+fmt.Println(idx.Count([]byte("hello world"))) // 1
+```
 
 ## Star-free regex search
 

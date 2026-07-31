@@ -210,6 +210,16 @@ func (idx *Index) AlphabetSize() int { return idx.inner.AlphabetSize() }
 // BWT returns a copy of the Burrows-Wheeler Transform.
 func (idx *Index) BWT() []byte { return idx.inner.BWT() }
 
+// Append incrementally appends text to the index (RopeBWT style).
+// Existing build options (suffix-array algorithm / occurrence structure) are preserved.
+func (idx *Index) Append(text []byte) error {
+	if idx == nil || idx.inner == nil {
+		return fmt.Errorf("nil index")
+	}
+	idx.inner.Append(text)
+	return nil
+}
+
 // Count returns the number of occurrences of pattern.
 func (idx *Index) Count(pattern []byte) int { return idx.inner.Count(pattern) }
 

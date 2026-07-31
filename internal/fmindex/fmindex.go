@@ -47,6 +47,9 @@ type Index struct {
 	sa   []int32      // suffix array
 	c    [256]int     // C array
 	occ  occStructure // occurrence array (bitvectors or wavelet tree)
+	algo SuffixArrayAlgorithm
+	typ  OccStructure
+	rope *rope
 }
 
 // SuffixArrayAlgorithm selects the suffix-array construction algorithm.
@@ -78,6 +81,21 @@ func BuildWithAlgorithm(text []byte, algo SuffixArrayAlgorithm) *Index {
 // construction algorithm and an explicit occurrence-array structure.
 // The text must not contain the null byte (0x00); it is reserved as sentinel.
 func BuildWithOptions(text []byte, algo SuffixArrayAlgorithm, occType OccStructure) *Index {
+	n, bwt, sa32, c, occ := buildState(text, algo, occType)
+	return &Index{
+		n:    n,
+		text: append([]byte(nil), text...),
+		bwt:  bwt,
+		sa:   sa32,
+		c:    c,
+		occ:  occ,
+		algo: algo,
+		typ:  occType,
+		rope: newRopeFromBytes(text),
+	}
+}
+
+func buildState(text []byte, algo SuffixArrayAlgorithm, occType OccStructure) (int, []byte, []int32, [256]int, occStructure) {
 	// --- 1. Append sentinel -------------------------------------------------
 	n := len(text) + 1
 	t := make([]byte, n)
@@ -123,15 +141,7 @@ func BuildWithOptions(text []byte, algo SuffixArrayAlgorithm, occType OccStructu
 	for i, v := range sa {
 		sa32[i] = int32(v)
 	}
-
-	return &Index{
-		n:    n,
-		text: append([]byte(nil), text...),
-		bwt:  bwt,
-		sa:   sa32,
-		c:    c,
-		occ:  occ,
-	}
+	return n, bwt, sa32, c, occ
 }
 
 // --- Public query methods ---------------------------------------------------
@@ -394,7 +404,7 @@ func buildSuffixArray(text []byte) []int {
 
 // --- Persistence -----------------------------------------------------------
 
-const magic   = "FMIDX01" // bitvector-based occ
+const magic = "FMIDX01"   // bitvector-based occ
 const magicV2 = "FMIDX02" // wavelet-tree-based occ (occ rebuilt from BWT on load)
 
 // countingWriter wraps an io.Writer and tracks the total bytes written.
@@ -558,6 +568,26 @@ func ReadFrom(r io.Reader) (*Index, error) {
 	}
 }
 
+// Append incrementally extends the indexed text and rebuilds FM-index state.
+// The original suffix-array algorithm and occurrence structure are preserved.
+func (idx *Index) Append(text []byte) {
+	if idx == nil || len(text) == 0 {
+		return
+	}
+	if idx.rope == nil {
+		idx.rope = newRopeFromBytes(idx.text)
+	}
+	idx.rope = idx.rope.Append(text)
+	combined := idx.rope.Bytes()
+	n, bwt, sa32, c, occ := buildState(combined, idx.algo, idx.typ)
+	idx.n = n
+	idx.text = combined
+	idx.bwt = bwt
+	idx.sa = sa32
+	idx.c = c
+	idx.occ = occ
+}
+
 // readCommonHeader reads n, text, bwt, sa, and c — fields shared by both formats.
 func readCommonHeader(br *bufio.Reader) (*Index, error) {
 	idx := &Index{}
@@ -624,6 +654,9 @@ func readFromV1(br *bufio.Reader) (*Index, error) {
 		}
 	}
 	idx.occ = occ
+	idx.algo = AlgorithmDoubling
+	idx.typ = OccBitvectors
+	idx.rope = newRopeFromBytes(idx.text)
 	return idx, nil
 }
 
@@ -635,5 +668,8 @@ func readFromV2(br *bufio.Reader) (*Index, error) {
 		return nil, err
 	}
 	idx.occ = buildOcc(idx.bwt, OccWaveletTree)
+	idx.algo = AlgorithmDoubling
+	idx.typ = OccWaveletTree
+	idx.rope = newRopeFromBytes(idx.text)
 	return idx, nil
 }

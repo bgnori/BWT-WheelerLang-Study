@@ -425,3 +425,43 @@ func TestWaveletSAISCombination(t *testing.T) {
 		}
 	}
 }
+
+func TestAppendMatchesRebuildBitvectors(t *testing.T) {
+	idx := Build([]byte("banana"))
+	idx.Append([]byte(" bandana"))
+	idx.Append([]byte(" banana"))
+
+	want := Build([]byte("banana bandana banana"))
+	patterns := []string{"banana", "band", "ana", "xyz"}
+	for _, pat := range patterns {
+		p := []byte(pat)
+		if got, exp := idx.Count(p), want.Count(p); got != exp {
+			t.Errorf("Count(%q): append=%d rebuild=%d", pat, got, exp)
+		}
+		gotPos := sortedPositions(idx.Locate(p, 0))
+		expPos := sortedPositions(want.Locate(p, 0))
+		if !intSliceEqual(gotPos, expPos) {
+			t.Errorf("Locate(%q): append=%v rebuild=%v", pat, gotPos, expPos)
+		}
+	}
+}
+
+func TestAppendMatchesRebuildWavelet(t *testing.T) {
+	idx := BuildWithOptions([]byte("miss"), AlgorithmSAIS, OccWaveletTree)
+	idx.Append([]byte("issippi"))
+	idx.Append([]byte(" river"))
+
+	want := BuildWithOptions([]byte("mississippi river"), AlgorithmSAIS, OccWaveletTree)
+	patterns := []string{"iss", "ssi", "river", "xyz"}
+	for _, pat := range patterns {
+		p := []byte(pat)
+		if got, exp := idx.Count(p), want.Count(p); got != exp {
+			t.Errorf("Count(%q): append=%d rebuild=%d", pat, got, exp)
+		}
+		gotPos := sortedPositions(idx.Locate(p, 0))
+		expPos := sortedPositions(want.Locate(p, 0))
+		if !intSliceEqual(gotPos, expPos) {
+			t.Errorf("Locate(%q): append=%v rebuild=%v", pat, gotPos, expPos)
+		}
+	}
+}
