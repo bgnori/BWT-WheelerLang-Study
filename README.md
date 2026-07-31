@@ -97,10 +97,46 @@ make compare-demo
 ### `build` — インデックス構築
 
 ```
-bwtsearch build <input-file> <index-file>
+bwtsearch build [--algo doubling|sais] [--occ bitvectors|wavelet] <input-file> <index-file>
 ```
 
 テキストファイルから FM-index を構築し、バイナリ形式でファイルに保存します。
+
+- `--algo`: 接尾辞配列の構築アルゴリズム（既定値 `doubling`）
+  - `doubling`: 前置倍加法（Manber-Myers）。シンプルで安定。
+  - `sais`: SA-IS アルゴリズム。大規模テキストで高速。
+- `--occ`: Occ 配列の実装（既定値 `bitvectors`）
+  - `bitvectors`: 文字ごとの簡潔ビットベクトル。アルファベットが小さい場合に有利。
+  - `wavelet`: ウェーブレット木。アルファベットが大きい（バイト値の種類が多い）テキストで有利。
+
+**例：**
+
+```bash
+# デフォルト設定（前置倍加 + ビットベクトル）
+bwtsearch build data/moby_dick.txt data/moby_dick.idx
+
+# SA-IS アルゴリズムを使用
+bwtsearch build --algo sais data/moby_dick.txt data/moby_dick.idx
+
+# SA-IS + ウェーブレット木を使用
+bwtsearch build --algo sais --occ wavelet data/moby_dick.txt data/moby_dick.idx
+```
+
+### `build-multi` — 複数ファイルからインデックス構築
+
+```
+bwtsearch build-multi [--algo doubling|sais] [--occ bitvectors|wavelet] <index-file> <file1> [file2 ...]
+```
+
+複数のテキストファイルを結合して FM-index を構築します。ファイルの区切りには改行（`\n`）が使われます。
+
+- `--algo`/`--occ` オプションは `build` コマンドと同じです。
+
+**例：**
+
+```bash
+bwtsearch build-multi --algo sais data/combined.idx data/file1.txt data/file2.txt
+```
 
 ### `info` — インデックス情報表示
 

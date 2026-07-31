@@ -61,8 +61,8 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "bwtsearch <command> [args]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
-	fmt.Fprintln(os.Stderr, "  build <input-file> <index-file>")
-	fmt.Fprintln(os.Stderr, "  build-multi <index-file> <file1> [file2 ...]")
+	fmt.Fprintln(os.Stderr, "  build [--algo doubling|sais] [--occ bitvectors|wavelet] <input-file> <index-file>")
+	fmt.Fprintln(os.Stderr, "  build-multi [--algo doubling|sais] [--occ bitvectors|wavelet] <index-file> <file1> [file2 ...]")
 	fmt.Fprintln(os.Stderr, "  info <index-file>")
 	fmt.Fprintln(os.Stderr, "  graph [flags] <index-file>")
 	fmt.Fprintln(os.Stderr, "  browse <index-file> [--show N] [--context N]")
@@ -74,11 +74,22 @@ func usage() {
 func runBuild(args []string) error {
 	fs := flag.NewFlagSet("build", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
+	algoFlag := fs.String("algo", "doubling", "suffix-array construction algorithm: doubling or sais")
+	occFlag := fs.String("occ", "bitvectors", "occurrence-array structure: bitvectors or wavelet")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 2 {
-		return fmt.Errorf("usage: bwtsearch build <input-file> <index-file>")
+		return fmt.Errorf("usage: bwtsearch build [--algo doubling|sais] [--occ bitvectors|wavelet] <input-file> <index-file>")
+	}
+
+	algo, err := parseAlgo(*algoFlag)
+	if err != nil {
+		return err
+	}
+	occ, err := parseOcc(*occFlag)
+	if err != nil {
+		return err
 	}
 
 	inputPath := fs.Arg(0)
@@ -88,7 +99,7 @@ func runBuild(args []string) error {
 		return fmt.Errorf("read input: %w", err)
 	}
 
-	idx := bwtsearch.Build(text)
+	idx := bwtsearch.BuildWithOptions(text, algo, occ)
 	out, err := os.Create(indexPath)
 	if err != nil {
 		return fmt.Errorf("create index: %w", err)
@@ -105,11 +116,22 @@ func runBuild(args []string) error {
 func runBuildMulti(args []string) error {
 	fs := flag.NewFlagSet("build-multi", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
+	algoFlag := fs.String("algo", "doubling", "suffix-array construction algorithm: doubling or sais")
+	occFlag := fs.String("occ", "bitvectors", "occurrence-array structure: bitvectors or wavelet")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() < 2 {
-		return fmt.Errorf("usage: bwtsearch build-multi <index-file> <file1> [file2 ...]")
+		return fmt.Errorf("usage: bwtsearch build-multi [--algo doubling|sais] [--occ bitvectors|wavelet] <index-file> <file1> [file2 ...]")
+	}
+
+	algo, err := parseAlgo(*algoFlag)
+	if err != nil {
+		return err
+	}
+	occ, err := parseOcc(*occFlag)
+	if err != nil {
+		return err
 	}
 
 	indexPath := fs.Arg(0)
@@ -122,7 +144,7 @@ func runBuildMulti(args []string) error {
 		texts = append(texts, text)
 	}
 
-	idx := bwtsearch.BuildFromFiles(texts, nil)
+	idx := bwtsearch.BuildFromFilesWithOptions(texts, nil, algo, occ)
 	out, err := os.Create(indexPath)
 	if err != nil {
 		return fmt.Errorf("create index: %w", err)
@@ -449,6 +471,28 @@ func runCompare(args []string) error {
 	fmt.Printf("fm-index: %d matches in %s\n", fmCount, fmElapsed)
 	fmt.Printf("stdlib  : %d matches in %s\n", stdlibCount, stdlibElapsed)
 	return nil
+}
+
+func parseAlgo(s string) (bwtsearch.SuffixArrayAlgorithm, error) {
+	switch strings.ToLower(s) {
+	case "doubling", "":
+		return bwtsearch.AlgorithmDoubling, nil
+	case "sais":
+		return bwtsearch.AlgorithmSAIS, nil
+	default:
+		return 0, fmt.Errorf("unknown algorithm %q: choose doubling or sais", s)
+	}
+}
+
+func parseOcc(s string) (bwtsearch.OccStructure, error) {
+	switch strings.ToLower(s) {
+	case "bitvectors", "bitvector", "":
+		return bwtsearch.OccBitvectors, nil
+	case "wavelet", "wavelettree":
+		return bwtsearch.OccWaveletTree, nil
+	default:
+		return 0, fmt.Errorf("unknown occ structure %q: choose bitvectors or wavelet", s)
+	}
 }
 
 func loadIndex(path string) (*bwtsearch.Index, error) {
