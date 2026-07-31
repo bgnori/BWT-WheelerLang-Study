@@ -430,6 +430,46 @@ docker compose run bwtsearch build --algo sais /data/osativa_chr1.txt /data/osat
 
 > **注意：** FASTA ファイル（`data/*.fna`）・平文テキスト（`data/*.txt`）・インデックス（`data/*.idx`）はすべて `.gitignore` に登録されており、リポジトリにはコミットしないでください。
 
+### Kaggle Amazon データセット（小・中・大）
+
+Kaggle の以下 3 データセットを、テスト/ベンチマーク用コーパスとして扱えます（**データ本体はコミット禁止**）。
+
+- **小**: Amazon Laptop Prices Dataset（既定: `ionaskel/laptop-prices`）
+- **中**: Amazon Mobile Dataset（既定: `PromptCloudHQ/amazon-unlocked-mobile`）
+- **大**: Amazon Product Dataset (100K+)（既定: `piyushjain16/amazon-product-dataset`）
+
+#### 前提
+
+- Kaggle CLI が必要です（`pip install kaggle`）。
+- Kaggle API 認証（`~/.kaggle/kaggle.json` または `KAGGLE_USERNAME`/`KAGGLE_KEY`）を設定してください。
+- データセット ID は必要に応じて環境変数で上書きできます。
+  - `KAGGLE_DATASET_SMALL`
+  - `KAGGLE_DATASET_MEDIUM`
+  - `KAGGLE_DATASET_LARGE`
+
+#### ローカル（Go）での手順
+
+```bash
+# 小
+make download-amazon-small
+make prepare-amazon-small
+make build-index-amazon-small
+
+# 中
+make download-amazon-medium
+make prepare-amazon-medium
+make build-index-amazon-medium
+
+# 大
+make download-amazon-large
+make prepare-amazon-large
+make build-index-amazon-large
+```
+
+生データは `data/kaggle/<small|medium|large>/` に展開され、前処理後テキストは `data/amazon_<size>.txt` に出力されます。前処理では CSV/TSV の複数列（商品名・ブランド・説明など）を正規化して 1 行テキストにまとめ、FM-index 入力に使える形式へ変換します。
+
+> **注意：** Kaggle の zip/csv/tsv などの生データと、生成される `.txt` / `.idx` は `.gitignore` で除外されます。リポジトリへコミットしないでください。
+
 ### Git LFS について
 
 このリポジトリは **現時点では Git LFS を必須としていません**。大容量になりやすいデータは `data/` 配下に置き、`.gitignore` で管理します。

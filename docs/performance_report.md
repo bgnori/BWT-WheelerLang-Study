@@ -30,6 +30,14 @@
 | **上杉謙信 (Kenshin)** | 日本語テキスト (UTF-8) | 391 KB (400,000 B) | 戦国武将をテーマにした日本語テキスト (UTF-8 マルチバイト) |
 | **Git ソース** | C ソースコード | 4.7 MB (4,913,691 B) | 60 ファイルの C/ヘッダファイル群（合算） |
 
+追加の実データ候補（Kaggle）:
+
+- 小: Amazon Laptop Prices Dataset
+- 中: Amazon Mobile Dataset
+- 大: Amazon Product Dataset (100K+)
+
+これらは `scripts/download_kaggle_amazon.sh` と `scripts/prepare_kaggle_amazon.sh` で取得・前処理できます（データ本体は非コミット）。
+
 > **注記**: 外部ネットワークが利用不可の環境であったため、本測定では各データセットの統計的特性（語彙分布・パターン出現頻度）を再現した合成コーパスを使用しました。実際のデータ（Project Gutenberg, 青空文庫, GitHub の git リポジトリ）は `scripts/download_*.sh` でダウンロードできます。
 
 ---
