@@ -113,9 +113,10 @@ res, err := bwtsearch.Search(idx, "[あ-を]", 0)
 - Unicode 範囲（rune > 127）を含む文字クラスに対して `UnsupportedError` を返す
 - または `docs/library_api.md` に「文字クラスは ASCII (U+0000–U+007F) のみ対応」と明記する
 
-**現在の状態（部分対応）:**  
-`docs/library_api.md` の「Star-free regex search」節に ASCII 限定の制限事項を記載済み。
-`UnsupportedError` を返す対応は未実施。
+**現在の状態（未対応）:**  
+再レビュー（2026-07-31）で確認したところ、`docs/library_api.md` に ASCII 限定の制限事項の記載は
+存在しない（以前の「部分対応」記載は誤り）。`UnsupportedError` を返す対応も未実施のため、
+ドキュメント追記またはエラー返却のいずれかの対応が必要。
 
 ---
 
@@ -300,6 +301,60 @@ Issue #3 と同様に、以下のいずれかで統一する：
 
 ---
 
+## #13 — デシリアライズ時に長さフィールドを検証していない 🔴
+
+**ファイル:** `internal/fmindex/fmindex.go`, `biindex.go`, `stdlib_index.go`
+
+**問題:**  
+`ReadFrom`（`readCommonHeader`）、`ReadBiFrom`、`ReadStdlibFrom` は、ストリームから読み取った
+長さフィールド（`n64`・`tlen`・`fwdLen`・`revLen` など）を検証せずに `make([]byte, n)` に渡している。
+
+```go
+// readCommonHeader — 検証なし
+var tlen int64
+binary.Read(br, binary.LittleEndian, &tlen)
+idx.text = make([]byte, tlen)   // tlen < 0 → panic / 巨大値 → OOM
+```
+
+- 負の値が読み込まれた場合、`make` が `panic: makeslice: len out of range` で即座にクラッシュする
+- 攻撃的に巨大な値（例: `1<<62`）を含む破損ファイルを `Load` すると、メモリを大量に確保しようとして OOM になり得る
+
+信頼できないファイルを `Load` / `LoadBi` / `LoadStdlib` で読み込むユースケース（CLI でユーザー指定の
+インデックスファイルを開くなど）では DoS ベクタになる。
+
+**対処案:**  
+各長さフィールド読み込み直後に検証を追加する：
+1. 負の値なら即座にエラーを返す
+2. 妥当な上限（残りストリームサイズが不明なため、たとえば `io.LimitReader` の併用や段階的読み込み）を検討する
+3. 少なくとも `tlen < 0 || n64 < 0` チェックとエラー返却を全デシリアライザに追加する
+
+---
+
+## #14 — `BiIndex.ExtendLeft` / `ExtendRight` が 1 ステップあたり最大 255 回の rank 呼び出しを行う 🟢
+
+**ファイル:** `biindex.go`
+
+**問題:**  
+`ExtendLeft` / `ExtendRight` は「c より小さい文字の出現数」を求めるために
+`for b := 0; b < int(c); b++` で全文字を走査し、1 文字あたり 2 回の `OccCount` を呼んでいる。
+
+```go
+countLess := 0
+for b := 0; b < int(c); b++ {
+    countLess += f.OccCount(byte(b), bi.HiFwd) - f.OccCount(byte(b), bi.LoFwd)
+}
+```
+
+1 回の拡張につき最大 510 回の rank クエリが発生するため、長いパターンの双方向検索や
+seed-and-extend 系の近似検索では大きなオーバーヘッドになる。
+
+**対処案（将来的な検討）:**  
+- Wavelet Tree / Wavelet Matrix の `rangeCount`（区間内で c 未満の文字数を O(log σ) で数える操作）を
+  内部 API として公開し、それを利用する
+- 実際にインデックスに現れる文字のみ走査する（`AlphabetSize` ベースの文字リストを保持する）
+
+---
+
 ## 対応状況まとめ
 
 | # | タイトル | 優先度 | 状態 |
@@ -307,7 +362,7 @@ Issue #3 と同様に、以下のいずれかで統一する：
 | 1 | 位置アンカーがサイレントに無視される | 🔴 High | ✅ 対応済み |
 | 2 | `BuildFromFiles` のセパレータ検証なし | 🔴 High | ✅ 対応済み |
 | 3 | `*Index` メソッドの nil チェック非一貫 | 🔴 High | 🔸 `Search`/`Append`/`WriteTo` は対応済み、`Count`/`Locate` 等は未対応 |
-| 4 | Unicode 文字クラスがエラーなく 0 件になる | 🟡 Medium | 🔸 ドキュメントに制限事項を記載済み（`UnsupportedError` 未対応） |
+| 4 | Unicode 文字クラスがエラーなく 0 件になる | 🟡 Medium | 未対応（ドキュメント記載も未実施と再確認） |
 | 5 | `Search` が正規表現を 2 回パース | 🟡 Medium | ✅ 対応済み |
 | 6 | `Build(nil)` が未テスト・未文書化 | 🟡 Medium | 未対応 |
 | 7 | CI/CD ワークフローがない | 🔴 High | 未対応 |
@@ -316,3 +371,5 @@ Issue #3 と同様に、以下のいずれかで統一する：
 | 10 | モジュールパスに "study" が含まれる | 🟢 Low | 未対応 |
 | 11 | `BuildStdlibFromFiles` の 0x00 セパレータ検証なし | 🔴 High | 未対応 |
 | 12 | `BiIndex`/`StdlibIndex` のメソッドに nil レシーバーチェックなし | 🔴 High | 未対応 |
+| 13 | デシリアライズ時に長さフィールドを検証していない | 🔴 High | 未対応 |
+| 14 | `BiIndex` 拡張が 1 ステップあたり O(σ) 回の rank 呼び出し | 🟢 Low | 未対応 |
