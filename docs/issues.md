@@ -15,7 +15,7 @@
 
 ---
 
-## #1 — 位置アンカーがサイレントに無視される 🔴
+## #1 — 位置アンカーがサイレントに無視される 🔴 ✅ 対応済み
 
 **ファイル:** `internal/starfree/starfree.go`
 
@@ -35,6 +35,11 @@ res, _ := bwtsearch.Search(idx, "^hello", 0)
 **対処案:**
 - アンカーを含むパターンに対して `ViolationError`（または新しい `UnsupportedError`）を返す
 - 少なくとも `docs/library_api.md` に「位置アンカーは FM-index の後方検索モデルでは表現できないため無視される」と明記する
+
+**対応内容:**  
+`api.go` に `UnsupportedError` 型を追加し、`internal/starfree/starfree.go` の `checkNode()` で
+`OpBeginText`・`OpEndText`・`OpBeginLine`・`OpEndLine`・`OpWordBoundary`・`OpNoWordBoundary` を
+検出した際に `UnsupportedError` を返すよう修正済み。`Check` および `Search` 経由でも正しく伝播する。
 
 ---
 
@@ -225,7 +230,7 @@ git push origin v0.1.0
 
 | # | タイトル | 優先度 | 状態 |
 |---|----------|--------|------|
-| 1 | 位置アンカーがサイレントに無視される | 🔴 High | 未対応 |
+| 1 | 位置アンカーがサイレントに無視される | 🔴 High | ✅ 対応済み |
 | 2 | `BuildFromFiles` のセパレータ検証なし | 🔴 High | 未対応 |
 | 3 | `*Index` メソッドの nil チェック非一貫 | 🔴 High | 未対応 |
 | 4 | Unicode 文字クラスがエラーなく 0 件になる | 🟡 Medium | 未対応 |
