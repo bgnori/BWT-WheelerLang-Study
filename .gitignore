@@ -39,6 +39,9 @@ data/*.txt
 data/*.idx
 data/*.bin
 
+# FASTA genome data downloaded for indexing tests — must NOT be committed
+data/*.fna
+
 # Git source code downloaded for indexing tests — must NOT be committed
 data/git-src/
 

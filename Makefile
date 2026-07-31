@@ -1,4 +1,4 @@
-.PHONY: all build test lint clean download-testdata download-kenshin download-git docker-build docker-run
+.PHONY: all build test lint clean download-testdata download-kenshin download-git download-ecoli prepare-ecoli docker-build docker-run
 
 BINARY  := bwtsearch
 DATADIR := data
@@ -6,6 +6,7 @@ INDEXFILE := $(DATADIR)/moby_dick.idx
 KENSHIN_INDEXFILE := $(DATADIR)/kenshin.idx
 GIT_SRC_DIR := $(DATADIR)/git-src
 GIT_INDEXFILE := $(DATADIR)/git.idx
+ECOLI_INDEXFILE := $(DATADIR)/ecoli.idx
 
 all: build
 
@@ -79,6 +80,15 @@ download-git:
 	@mkdir -p $(DATADIR)
 	./scripts/download_git.sh $(DATADIR)
 
+## download-ecoli: download E. coli K-12 MG1655 genome (FASTA) from NCBI (not committed)
+download-ecoli:
+	@mkdir -p $(DATADIR)
+	./scripts/download_ecoli.sh $(DATADIR)
+
+## prepare-ecoli: convert FASTA to plain-text DNA for FM-index (not committed)
+prepare-ecoli: $(DATADIR)/ecoli.fna
+	./scripts/prepare_ecoli.sh $(DATADIR)
+
 ## build-index-git: build the FM-index from the Git source files
 build-index-git: $(GIT_SRC_DIR)
 	find $(GIT_SRC_DIR) -type f \( -name "*.c" -o -name "*.h" \) | sort | \
@@ -93,6 +103,19 @@ suffixarray-demo-git: $(GIT_SRC_DIR)
 	find $(GIT_SRC_DIR) -type f \( -name "*.c" -o -name "*.h" \) | sort | \
 	    xargs ./$(BINARY) build-multi --algo suffixarray $(DATADIR)/git.saidx
 	./$(BINARY) search --limit 10 $(DATADIR)/git.saidx "commit"
+
+## build-index-ecoli: build the FM-index from the E. coli genome text (SA-IS recommended for large input)
+build-index-ecoli: $(DATADIR)/ecoli.txt
+	./$(BINARY) build --algo sais $(DATADIR)/ecoli.txt $(ECOLI_INDEXFILE)
+
+## search-demo-ecoli: run a sample search on the E. coli genome index
+search-demo-ecoli: $(ECOLI_INDEXFILE)
+	./$(BINARY) search --limit 10 $(ECOLI_INDEXFILE) "ATGAAACGC"
+
+## suffixarray-demo-ecoli: build and search with stdlib suffix array for E. coli genome
+suffixarray-demo-ecoli: $(DATADIR)/ecoli.txt
+	./$(BINARY) build --algo suffixarray $(DATADIR)/ecoli.txt $(DATADIR)/ecoli.saidx
+	./$(BINARY) search --limit 10 $(DATADIR)/ecoli.saidx "ATGAAACGC"
 
 help:
 	@grep -E '^## ' Makefile | sed 's/## /  /'
