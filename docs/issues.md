@@ -330,7 +330,7 @@ nil レシーバーに対してゼロ値を返し、両者の `WriteTo`（およ
 
 ---
 
-## #13 — デシリアライズ時に長さフィールドを検証していない 🔴 ✅ 対応済み
+## #13 — デシリアライズ時の長さフィールド検証が不十分 🔴 ⚠️ 部分対応
 
 **ファイル:** `internal/fmindex/fmindex.go`, `biindex.go`, `stdlib_index.go`
 
@@ -366,13 +366,21 @@ idx.text = make([]byte, tlen)   // tlen < 0 → panic / 巨大値 → OOM
 `TestReadFromRejectsCorruptLengths`・`TestReadBiFromRejectsNegativeLength`・
 `TestReadStdlibFromRejectsNegativeLength` で検証済み。
 
+**残課題:**
+再レビュー（2026-07-31）では、負値と整数オーバーフローは拒否できる一方、入力ストリームの
+残りサイズに対して長さが妥当かは検証されていないことを確認した。64 bit 環境の `MaxInt/4` は
+実用上の上限として大きすぎ、`ReadBiFrom` と `ReadStdlibFrom` には正値の上限自体がない。
+そのため、小さな破損ストリームに巨大な正の長さを記録すると、`io.ReadFull` より前の `make` で
+過大なメモリ確保を試みる可能性が残る。読み込みバイト数の上限、既知サイズとの照合、または
+段階的な制限付き読み込みが必要。
+
 ---
 
 ## #14 — `BiIndex.ExtendLeft` / `ExtendRight` が 1 ステップあたり最大 255 回の rank 呼び出しを行う 🟢
 
 **ファイル:** `biindex.go`
 
-**問題:**  
+**問題:**
 `ExtendLeft` / `ExtendRight` は「c より小さい文字の出現数」を求めるために
 `for b := 0; b < int(c); b++` で全文字を走査し、1 文字あたり 2 回の `OccCount` を呼んでいる。
 
@@ -393,6 +401,65 @@ seed-and-extend 系の近似検索では大きなオーバーヘッドになる�
 
 ---
 
+## #15 — FM-index の入力本文に `0x00` が含まれても拒否されない 🔴
+
+**ファイル:** `internal/fmindex/fmindex.go`, `api.go`, `biindex.go`
+
+**問題:**
+内部実装の godoc は `0x00` を一意な番兵として予約し、入力本文に含めてはならないとしているが、
+`Build`・`BuildWithAlgorithm`・`BuildWithOptions`・`BuildBi*` は本文を検証していない。
+`BuildFromFiles*` もセパレータだけを検証し、各本文内の `0x00` はそのまま連結する。
+`Append` も追加文字列を検証しない。
+
+本文に `0x00` があると番兵が一意でなくなり、suffix array 構築の前提が崩れて検索結果の正確性を
+保証できない。CLI の `build` / `build-multi` からバイナリファイルを入力した場合にも発生し得る。
+
+**対処案:**
+- FM-index の全構築経路と `Append` で本文中の `0x00` を検出し、一貫した方法で拒否する
+- 現行の構築 API は `error` を返さないため、当面は documented panic とし、将来の破壊的変更で
+  エラーを返す API を検討する
+- 単一入力、複数入力、双方向インデックス、Append の回帰テストを追加する
+
+---
+
+## #16 — 保存・復元後の `Append` で suffix-array アルゴリズムが保持されない 🟡
+
+**ファイル:** `internal/fmindex/fmindex.go`
+
+**問題:**
+`Append` は「構築時の suffix-array アルゴリズムを保持する」と説明されているが、永続化形式には
+`algo` が保存されない。`readFromV1` と `readFromRebuildOcc` は読み込み時に常に
+`AlgorithmDoubling` を設定するため、`AlgorithmSAIS` で構築したインデックスを保存・復元してから
+`Append` すると、再構築処理が doubling に切り替わる。
+
+検索結果の正確性には通常影響しないが、性能特性が API の説明と異なり、大規模データでは追加処理の
+実行時間が大きく変わり得る。
+
+**対処案:**
+- 次の永続化フォーマットにアルゴリズム識別子を追加する
+- 旧フォーマットは doubling として読み込む後方互換方針を明記する
+- SA-IS で構築したインデックスの保存・復元・Append を検証するテストを追加する
+
+---
+
+## #17 — stdlib / BiIndex の検索結果が件数ちょうどでも truncated 扱いになる 🟡
+
+**ファイル:** `cmd/bwtsearch/main.go`
+
+**問題:**
+`searchAny` は `StdlibIndex` と `BiIndex` について
+`limit > 0 && len(pos) == limit` を truncated 判定に使う。この条件では、総件数が limit と
+完全に一致して追加結果が存在しない場合にも `true` となり、CLI / TUI / Web UI に
+「結果を切り詰めた」という誤った表示が出る。
+
+FM-index の正規表現検索は `TotalCount > limit` で判定しており、バックエンド間で意味が一致しない。
+
+**対処案:**
+`Count(pattern) > limit` で判定するか、`limit+1` 件を取得して追加結果の有無を確認する。
+総件数が `limit-1`、`limit`、`limit+1` のケースを各バックエンドでテストする。
+
+---
+
 ## 対応状況まとめ
 
 | # | タイトル | 優先度 | 状態 |
@@ -409,5 +476,8 @@ seed-and-extend 系の近似検索では大きなオーバーヘッドになる�
 | 10 | モジュールパスに "study" が含まれる | 🟢 Low | 未対応 |
 | 11 | `BuildStdlibFromFiles` の 0x00 セパレータ検証なし | 🔴 High | ✅ 対応済み |
 | 12 | `BiIndex`/`StdlibIndex` のメソッドに nil レシーバーチェックなし | 🔴 High | ✅ 対応済み |
-| 13 | デシリアライズ時に長さフィールドを検証していない | 🔴 High | ✅ 対応済み |
+| 13 | デシリアライズ時の長さフィールド検証が不十分 | 🔴 High | ⚠️ 部分対応 |
 | 14 | `BiIndex` 拡張が 1 ステップあたり O(σ) 回の rank 呼び出し | 🟢 Low | 未対応 |
+| 15 | FM-index の入力本文に `0x00` が含まれても拒否されない | 🔴 High | 未対応 |
+| 16 | 保存・復元後の `Append` で構築アルゴリズムが保持されない | 🟡 Medium | 未対応 |
+| 17 | stdlib / BiIndex の検索結果が件数ちょうどでも truncated 扱いになる | 🟡 Medium | 未対応 |
