@@ -43,7 +43,7 @@ res, _ := bwtsearch.Search(idx, "^hello", 0)
 
 ---
 
-## #2 — `BuildFromFiles` のセパレータに `0x00` を渡してもエラーにならない 🔴
+## #2 — `BuildFromFiles` のセパレータに `0x00` を渡してもエラーにならない 🔴 ✅ 対応済み
 
 **ファイル:** `api.go`
 
@@ -61,6 +61,11 @@ for _, b := range separator {
 }
 ```
 または `error` を返すシグネチャに変更する（破壊的変更になるため `v2` 以降）。
+
+**対応内容:**  
+`api.go` の `BuildFromFiles` に `0x00` バイトの検証ループを追加し、セパレータに `0x00` が含まれる場合は
+`"bwtsearch: separator must not contain 0x00 (reserved as sentinel)"` メッセージとともに panic するよう修正済み。
+godoc にも panic 条件を明記した。`api_test.go` に 2 件のテストケースを追加して動作を検証済み。
 
 ---
 
@@ -231,7 +236,7 @@ git push origin v0.1.0
 | # | タイトル | 優先度 | 状態 |
 |---|----------|--------|------|
 | 1 | 位置アンカーがサイレントに無視される | 🔴 High | ✅ 対応済み |
-| 2 | `BuildFromFiles` のセパレータ検証なし | 🔴 High | 未対応 |
+| 2 | `BuildFromFiles` のセパレータ検証なし | 🔴 High | ✅ 対応済み |
 | 3 | `*Index` メソッドの nil チェック非一貫 | 🔴 High | 未対応 |
 | 4 | Unicode 文字クラスがエラーなく 0 件になる | 🟡 Medium | 未対応 |
 | 5 | `Search` が正規表現を 2 回パース | 🟡 Medium | 未対応 |
