@@ -117,6 +117,9 @@ type Index struct {
 }
 
 // Build constructs an index from text using the default algorithm.
+// Passing nil or an empty slice is valid and returns an index over the empty
+// text (sentinel only): Count reports 0 for any non-empty pattern, Search
+// finds no matches, TextLen is 0, and SALen is 1.
 func Build(text []byte) *Index {
 	return &Index{inner: fmindex.Build(text)}
 }
@@ -241,27 +244,69 @@ func (idx *Index) Save(path string) error {
 }
 
 // TextLen returns the original text length.
-func (idx *Index) TextLen() int { return idx.inner.TextLen() }
+// A nil *Index returns 0.
+func (idx *Index) TextLen() int {
+	if idx == nil || idx.inner == nil {
+		return 0
+	}
+	return idx.inner.TextLen()
+}
 
 // SALen returns the suffix-array length (text + sentinel).
-func (idx *Index) SALen() int { return idx.inner.SALen() }
+// A nil *Index returns 0.
+func (idx *Index) SALen() int {
+	if idx == nil || idx.inner == nil {
+		return 0
+	}
+	return idx.inner.SALen()
+}
 
 // SAAt returns the text position stored at suffix-array index i.
-func (idx *Index) SAAt(i int) int { return idx.inner.SAAt(i) }
+// A nil *Index returns 0.
+func (idx *Index) SAAt(i int) int {
+	if idx == nil || idx.inner == nil {
+		return 0
+	}
+	return idx.inner.SAAt(i)
+}
 
 // AlphabetSize returns the number of distinct characters in the text.
-func (idx *Index) AlphabetSize() int { return idx.inner.AlphabetSize() }
+// A nil *Index returns 0.
+func (idx *Index) AlphabetSize() int {
+	if idx == nil || idx.inner == nil {
+		return 0
+	}
+	return idx.inner.AlphabetSize()
+}
 
 // NumBWTRuns returns the number of equal-character runs in the BWT.
 // This is the r parameter of the r-index: smaller values indicate more
 // repetitive texts and a more compact RLBWT representation.
-func (idx *Index) NumBWTRuns() int { return idx.inner.NumBWTRuns() }
+// A nil *Index returns 0.
+func (idx *Index) NumBWTRuns() int {
+	if idx == nil || idx.inner == nil {
+		return 0
+	}
+	return idx.inner.NumBWTRuns()
+}
 
 // OccType returns the occurrence-array structure used by this index.
-func (idx *Index) OccType() OccStructure { return OccStructure(idx.inner.OccType()) }
+// A nil *Index returns OccBitvectors (the zero value).
+func (idx *Index) OccType() OccStructure {
+	if idx == nil || idx.inner == nil {
+		return OccBitvectors
+	}
+	return OccStructure(idx.inner.OccType())
+}
 
 // BWT returns a copy of the Burrows-Wheeler Transform.
-func (idx *Index) BWT() []byte { return idx.inner.BWT() }
+// A nil *Index returns nil.
+func (idx *Index) BWT() []byte {
+	if idx == nil || idx.inner == nil {
+		return nil
+	}
+	return idx.inner.BWT()
+}
 
 // Append incrementally appends text to the index (RopeBWT style).
 // Existing build options (suffix-array algorithm / occurrence structure) are preserved.
@@ -274,18 +319,38 @@ func (idx *Index) Append(text []byte) error {
 }
 
 // Count returns the number of occurrences of pattern.
-func (idx *Index) Count(pattern []byte) int { return idx.inner.Count(pattern) }
+// A nil *Index returns 0.
+func (idx *Index) Count(pattern []byte) int {
+	if idx == nil || idx.inner == nil {
+		return 0
+	}
+	return idx.inner.Count(pattern)
+}
 
 // Locate returns up to limit positions where pattern begins.
-func (idx *Index) Locate(pattern []byte, limit int) []int { return idx.inner.Locate(pattern, limit) }
+// A nil *Index returns nil.
+func (idx *Index) Locate(pattern []byte, limit int) []int {
+	if idx == nil || idx.inner == nil {
+		return nil
+	}
+	return idx.inner.Locate(pattern, limit)
+}
 
 // ContextAround returns a snippet around a match position.
+// A nil *Index returns the empty string.
 func (idx *Index) ContextAround(pos, patLen, ctxSize int) string {
+	if idx == nil || idx.inner == nil {
+		return ""
+	}
 	return idx.inner.ContextAround(pos, patLen, ctxSize)
 }
 
 // WheelerGraphMermaid returns a Mermaid graph representation.
+// A nil *Index returns the empty string.
 func (idx *Index) WheelerGraphMermaid(maxNodes int) string {
+	if idx == nil || idx.inner == nil {
+		return ""
+	}
 	return idx.inner.WheelerGraphMermaid(maxNodes)
 }
 

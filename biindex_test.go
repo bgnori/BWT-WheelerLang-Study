@@ -288,3 +288,110 @@ func intSliceEq(a, b []int) bool {
 	}
 	return true
 }
+
+// --- nil receiver & corrupt-stream tests ------------------------------------
+
+func TestNilBiIndexZeroValues(t *testing.T) {
+	var idx *BiIndex
+
+	if got := idx.TextLen(); got != 0 {
+		t.Fatalf("nil TextLen = %d, want 0", got)
+	}
+	if got := idx.Count([]byte("abc")); got != 0 {
+		t.Fatalf("nil Count = %d, want 0", got)
+	}
+	if got := idx.Locate([]byte("abc"), 0); got != nil {
+		t.Fatalf("nil Locate = %v, want nil", got)
+	}
+	if got := idx.ContextAround(0, 0, 0); got != "" {
+		t.Fatalf("nil ContextAround = %q, want empty", got)
+	}
+	if got := idx.FullInterval(); got != (BiInterval{}) {
+		t.Fatalf("nil FullInterval = %+v, want zero", got)
+	}
+	if got := idx.ExtendLeft(BiInterval{}, 'a'); got != (BiInterval{}) {
+		t.Fatalf("nil ExtendLeft = %+v, want zero", got)
+	}
+	if got := idx.ExtendRight(BiInterval{}, 'a'); got != (BiInterval{}) {
+		t.Fatalf("nil ExtendRight = %+v, want zero", got)
+	}
+	var buf bytes.Buffer
+	if _, err := idx.WriteTo(&buf); err == nil {
+		t.Fatal("expected error writing nil BiIndex")
+	}
+}
+
+func TestNilStdlibIndexZeroValues(t *testing.T) {
+	var idx *StdlibIndex
+
+	if got := idx.TextLen(); got != 0 {
+		t.Fatalf("nil TextLen = %d, want 0", got)
+	}
+	if got := idx.Count([]byte("abc")); got != 0 {
+		t.Fatalf("nil Count = %d, want 0", got)
+	}
+	if got := idx.Locate([]byte("abc"), 0); got != nil {
+		t.Fatalf("nil Locate = %v, want nil", got)
+	}
+	if got := idx.ContextAround(0, 0, 0); got != "" {
+		t.Fatalf("nil ContextAround = %q, want empty", got)
+	}
+	var buf bytes.Buffer
+	if _, err := idx.WriteTo(&buf); err == nil {
+		t.Fatal("expected error writing nil StdlibIndex")
+	}
+}
+
+func TestBuildStdlibFromFilesPanicsOnNullSeparator(t *testing.T) {
+	texts := [][]byte{[]byte("hello"), []byte("world")}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for separator containing 0x00")
+		}
+	}()
+	BuildStdlibFromFiles(texts, []byte{0x00})
+}
+
+func TestReadBiFromRejectsNegativeLength(t *testing.T) {
+	var buf bytes.Buffer
+	buf.WriteString("BIDX001")
+	// fwdLen = -1 (little-endian int64)
+	buf.Write([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+	if _, err := ReadBiFrom(&buf); err == nil {
+		t.Fatal("expected error for negative fwd length")
+	}
+}
+
+func TestReadStdlibFromRejectsNegativeLength(t *testing.T) {
+	var buf bytes.Buffer
+	buf.WriteString("SAIDX01")
+	// tlen = -1 (little-endian int64)
+	buf.Write([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+	if _, err := ReadStdlibFrom(&buf); err == nil {
+		t.Fatal("expected error for negative text length")
+	}
+}
+
+func TestReadFromRejectsCorruptLengths(t *testing.T) {
+	// Serialise a valid index, then corrupt the length fields.
+	idx := Build([]byte("abracadabra"))
+	var good bytes.Buffer
+	if _, err := idx.WriteTo(&good); err != nil {
+		t.Fatalf("WriteTo failed: %v", err)
+	}
+	data := good.Bytes()
+
+	// n64 is stored right after the 7-byte magic.
+	corruptN := append([]byte(nil), data...)
+	copy(corruptN[7:15], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}) // n = -1
+	if _, err := ReadFrom(bytes.NewReader(corruptN)); err == nil {
+		t.Fatal("expected error for negative n")
+	}
+
+	// tlen follows n64.
+	corruptT := append([]byte(nil), data...)
+	copy(corruptT[15:23], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}) // tlen = -1
+	if _, err := ReadFrom(bytes.NewReader(corruptT)); err == nil {
+		t.Fatal("expected error for inconsistent text length")
+	}
+}

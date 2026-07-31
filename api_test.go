@@ -113,6 +113,77 @@ func TestNilIndexErrors(t *testing.T) {
 	}
 }
 
+func TestNilIndexZeroValues(t *testing.T) {
+	var idx *Index
+
+	if got := idx.Count([]byte("abc")); got != 0 {
+		t.Fatalf("nil Count = %d, want 0", got)
+	}
+	if got := idx.Locate([]byte("abc"), 0); got != nil {
+		t.Fatalf("nil Locate = %v, want nil", got)
+	}
+	if got := idx.TextLen(); got != 0 {
+		t.Fatalf("nil TextLen = %d, want 0", got)
+	}
+	if got := idx.SALen(); got != 0 {
+		t.Fatalf("nil SALen = %d, want 0", got)
+	}
+	if got := idx.SAAt(0); got != 0 {
+		t.Fatalf("nil SAAt = %d, want 0", got)
+	}
+	if got := idx.AlphabetSize(); got != 0 {
+		t.Fatalf("nil AlphabetSize = %d, want 0", got)
+	}
+	if got := idx.NumBWTRuns(); got != 0 {
+		t.Fatalf("nil NumBWTRuns = %d, want 0", got)
+	}
+	if got := idx.BWT(); got != nil {
+		t.Fatalf("nil BWT = %v, want nil", got)
+	}
+	if got := idx.ContextAround(0, 0, 0); got != "" {
+		t.Fatalf("nil ContextAround = %q, want empty", got)
+	}
+	if got := idx.WheelerGraphMermaid(0); got != "" {
+		t.Fatalf("nil WheelerGraphMermaid = %q, want empty", got)
+	}
+	if got := idx.OccType(); got != OccBitvectors {
+		t.Fatalf("nil OccType = %v, want OccBitvectors", got)
+	}
+}
+
+func TestBuildNilAndEmpty(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		text []byte
+	}{
+		{"nil", nil},
+		{"empty", []byte{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			idx := Build(tc.text)
+			if idx == nil {
+				t.Fatal("Build returned nil index")
+			}
+			if got := idx.TextLen(); got != 0 {
+				t.Fatalf("TextLen = %d, want 0", got)
+			}
+			if got := idx.SALen(); got != 1 {
+				t.Fatalf("SALen = %d, want 1 (sentinel only)", got)
+			}
+			if got := idx.Count([]byte("a")); got != 0 {
+				t.Fatalf("Count(a) = %d, want 0", got)
+			}
+			res, err := Search(idx, "a", 0)
+			if err != nil {
+				t.Fatalf("Search failed: %v", err)
+			}
+			if res.TotalCount != 0 {
+				t.Fatalf("Search TotalCount = %d, want 0", res.TotalCount)
+			}
+		})
+	}
+}
+
 func TestBuildWithOptionsWavelet(t *testing.T) {
 	idx := BuildWithOptions([]byte("abracadabra"), AlgorithmDoubling, OccWaveletTree)
 

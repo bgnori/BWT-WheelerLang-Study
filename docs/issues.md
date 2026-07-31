@@ -70,7 +70,7 @@ godoc にも panic 条件を明記した。`api_test.go` に 2 件のテスト�
 
 ---
 
-## #3 — `*Index` メソッド群の nil チェックが非一貫 🔴
+## #3 — `*Index` メソッド群の nil チェックが非一貫 🔴 ✅ 対応済み
 
 **ファイル:** `api.go`
 
@@ -92,9 +92,15 @@ idx.Count([]byte("abc"))  // → panic: runtime error: nil pointer dereference
 1. ゼロ値 `*Index` に対してはゼロ値を返す（`Count` → 0、`Locate` → nil、`BWT` → nil など）
 2. panic を "documented behavior" として godoc に明記する
 
+**対応内容:**  
+対処案 1 を採用。`Count`・`Locate`・`TextLen`・`SALen`・`SAAt`・`AlphabetSize`・`NumBWTRuns`・
+`OccType`・`BWT`・`ContextAround`・`WheelerGraphMermaid` に nil チェックを追加し、
+nil レシーバーに対してゼロ値（0 / nil / 空文字列）を返すよう統一した。各メソッドの godoc にも明記。
+`TestNilIndexZeroValues` で全メソッドの動作を検証済み。
+
 ---
 
-## #4 — Unicode 文字クラスがエラーなく 0 件になる 🟡
+## #4 — Unicode 文字クラスがエラーなく 0 件になる 🟡 ✅ 対応済み
 
 **ファイル:** `internal/starfree/starfree.go`
 
@@ -117,6 +123,11 @@ res, err := bwtsearch.Search(idx, "[あ-を]", 0)
 再レビュー（2026-07-31）で確認したところ、`docs/library_api.md` に ASCII 限定の制限事項の記載は
 存在しない（以前の「部分対応」記載は誤り）。`UnsupportedError` を返す対応も未実施のため、
 ドキュメント追記またはエラー返却のいずれかの対応が必要。
+
+**対応内容:**  
+`docs/library_api.md` の「検索仕様（重要）」に、文字クラスは ASCII (U+0000–U+007F) のみ対応であり、
+非 ASCII を含む文字クラスはエラーなしに 0 件を返す旨と、非 ASCII 文字はリテラルとしてのみ検索
+できる旨を明記した。
 
 ---
 

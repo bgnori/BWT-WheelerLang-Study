@@ -635,11 +635,18 @@ func readCommonHeader(br *bufio.Reader) (*Index, error) {
 	if err := binary.Read(br, binary.LittleEndian, &n64); err != nil {
 		return nil, fmt.Errorf("fmindex: read n: %w", err)
 	}
+	// n64 must fit in int and n*4 (SA byte size) must not overflow.
+	if n64 < 1 || n64 > int64(^uint(0)>>1)/4 {
+		return nil, fmt.Errorf("fmindex: invalid n %d", n64)
+	}
 	idx.n = int(n64)
 
 	var tlen int64
 	if err := binary.Read(br, binary.LittleEndian, &tlen); err != nil {
 		return nil, fmt.Errorf("fmindex: read text len: %w", err)
+	}
+	if tlen != n64-1 {
+		return nil, fmt.Errorf("fmindex: invalid text length %d (want n-1 = %d)", tlen, n64-1)
 	}
 	idx.text = make([]byte, tlen)
 	if _, err := io.ReadFull(br, idx.text); err != nil {
