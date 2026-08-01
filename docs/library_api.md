@@ -2,7 +2,7 @@
 
 公開パッケージ:
 
-`github.com/bgnori/bwt-wheelerlang-study`
+`github.com/bgnori/textindex`
 
 `internal/...` の直接 import ではなく、上記パッケージを利用してください。
 
@@ -51,7 +51,7 @@ import (
 	"fmt"
 	"log"
 
-	bwtsearch "github.com/bgnori/bwt-wheelerlang-study"
+	bwtsearch "github.com/bgnori/textindex"
 )
 
 func main() {

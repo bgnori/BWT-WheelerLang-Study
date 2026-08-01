@@ -1,4 +1,4 @@
-module github.com/bgnori/bwt-wheelerlang-study
+module github.com/bgnori/textindex
 
 go 1.21
 

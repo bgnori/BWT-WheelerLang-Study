@@ -4,7 +4,7 @@
 
 ## 概要
 
-このドキュメントは、`github.com/bgnori/bwt-wheelerlang-study` を
+このドキュメントは、`github.com/bgnori/textindex` を
 勉強用プロジェクトから Go 外部ライブラリとして公開するために実施したコードレビューの記録です。
 
 ---
@@ -13,7 +13,7 @@
 
 | 要件 | 状態 | 備考 |
 |------|------|------|
-| モジュールパスが GitHub リポジトリパスと一致する | ✅ | `github.com/bgnori/bwt-wheelerlang-study` |
+| モジュールパスが GitHub リポジトリパスと一致する | ✅ | `github.com/bgnori/textindex` |
 | 公開 API がトップレベルパッケージに集約されている | ✅ | `api.go` (`package bwtsearch`) |
 | 内部実装が `internal/` に隔離されている | ✅ | `internal/fmindex`, `internal/bitvector`, `internal/starfree` |
 | パッケージコメント（godoc）が記述されている | ✅ | 全パッケージに記述済み |
@@ -139,7 +139,7 @@ Go モジュールシステムはパッケージ単位で依存関係を解決�
 1. **初回リリース**: `git tag v0.1.0` または `v1.0.0` を打つ
 2. **CHANGELOG.md**: リリースごとに変更点を記録する
 3. **後方互換性**: `v1.x.x` 期間中は公開 API の破壊的変更を避ける
-4. **`go get` での利用**: `go get github.com/bgnori/bwt-wheelerlang-study@v1.0.0`
+4. **`go get` での利用**: `go get github.com/bgnori/textindex@v1.0.0`
 
 ---
 

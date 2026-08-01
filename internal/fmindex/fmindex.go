@@ -31,7 +31,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/bgnori/bwt-wheelerlang-study/internal/bitvector"
+	"github.com/bgnori/textindex/internal/bitvector"
 )
 
 // sentinel is appended to the text before indexing.  It must be the

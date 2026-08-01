@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/bgnori/bwt-wheelerlang-study/internal/bitvector"
+	"github.com/bgnori/textindex/internal/bitvector"
 )
 
 // Tree is a Wavelet Tree built over a byte sequence.

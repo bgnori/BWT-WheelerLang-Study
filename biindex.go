@@ -30,7 +30,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/bgnori/bwt-wheelerlang-study/internal/fmindex"
+	"github.com/bgnori/textindex/internal/fmindex"
 )
 
 const biMagic = "BIDX001"

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/bgnori/bwt-wheelerlang-study/internal/fmindex"
+	"github.com/bgnori/textindex/internal/fmindex"
 )
 
 // --- Check tests -----------------------------------------------------------

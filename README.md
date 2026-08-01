@@ -1,4 +1,4 @@
-# BWT-WheelerLang-Study
+# textindex
 
 全文検索アルゴリズムの理解と評価のために、FM-index 系実装と Go 標準ライブラリ `index/suffixarray` を同一 CLI/API で扱えるようにしたリポジトリです。
 

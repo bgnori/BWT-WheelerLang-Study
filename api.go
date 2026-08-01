@@ -8,8 +8,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/bgnori/bwt-wheelerlang-study/internal/fmindex"
-	"github.com/bgnori/bwt-wheelerlang-study/internal/starfree"
+	"github.com/bgnori/textindex/internal/fmindex"
+	"github.com/bgnori/textindex/internal/starfree"
 )
 
 // ViolationError is returned by Check and Search when the pattern contains a

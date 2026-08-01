@@ -34,7 +34,7 @@ import (
 	"sort"
 	"unicode/utf8"
 
-	"github.com/bgnori/bwt-wheelerlang-study/internal/fmindex"
+	"github.com/bgnori/textindex/internal/fmindex"
 )
 
 // ViolationError describes a star-free constraint violation within a pattern.

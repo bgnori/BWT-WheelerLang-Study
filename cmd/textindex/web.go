@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	bwtsearch "github.com/bgnori/bwt-wheelerlang-study"
+	bwtsearch "github.com/bgnori/textindex"
 )
 
 func runWeb(args []string) error {

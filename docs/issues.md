@@ -1,8 +1,8 @@
 # 課題一覧 — ライブラリ公開レビューで洗い出した問題点
 
 作成日: 2026-07-31  
-最終更新: 2026-07-31  
-対象: `github.com/bgnori/bwt-wheelerlang-study` の外部ライブラリ化に向けたレビュー
+最終更新: 2026-08-01  
+対象: `github.com/bgnori/textindex` の外部ライブラリ化に向けたレビュー
 
 ---
 
@@ -207,7 +207,7 @@ jobs:
 ## #8 — セマンティックバージョンタグがない 🔴
 
 **問題:**  
-`git tag` がなく、`go get github.com/bgnori/bwt-wheelerlang-study@latest` が機能しない。  
+`git tag` がなく、`go get github.com/bgnori/textindex@latest` が機能しない。  
 また `pkg.go.dev` へのインデックス登録も初回タグが必要です。
 
 **対処案:**
@@ -216,8 +216,8 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-その後 `https://pkg.go.dev/github.com/bgnori/bwt-wheelerlang-study` を開くか、  
-`GOPROXY=https://proxy.golang.org go get github.com/bgnori/bwt-wheelerlang-study@v0.1.0`  
+その後 `https://pkg.go.dev/github.com/bgnori/textindex` を開くか、  
+`GOPROXY=https://proxy.golang.org go get github.com/bgnori/textindex@v0.1.0`  
 を実行して Go プロキシにインデックス登録を促す。
 
 ---
@@ -237,7 +237,7 @@ git push origin v0.1.0
 
 ---
 
-## #10 — モジュールパスに "study" が含まれており外部ライブラリ名として不適切 🟢
+## #10 — モジュールパスに "study" が含まれており外部ライブラリ名として不適切 🟢 ✅ クローズ（現状維持）
 
 **ファイル:** `go.mod`, `README.md`
 
@@ -257,6 +257,10 @@ git push origin v0.1.0
 
 **注意:**  
 モジュールパスの変更は後方互換性を破壊するため、`v1.0.0` タグを打つ前（現時点）に実施するのが最善です。
+
+**クローズ理由:**  
+現行モジュールパス `github.com/bgnori/textindex` は短く、公開ライブラリ名として十分に実用的であるため、
+本 Issue は「対応不要（現状維持）」としてクローズする。
 
 ---
 
@@ -476,7 +480,7 @@ FM-index の正規表現検索は `TotalCount > limit` で判定しており、�
 | 7 | CI/CD ワークフローがない | 🔴 High | ✅ 対応済み |
 | 8 | セマンティックバージョンタグがない | 🔴 High | 未対応 |
 | 9 | TUI 依存が利用者の `go.mod` に現れる | 🟢 Low | 未対応 |
-| 10 | モジュールパスに "study" が含まれる | 🟢 Low | 未対応 |
+| 10 | モジュールパスに "study" が含まれる | 🟢 Low | ✅ クローズ（現状維持） |
 | 11 | `BuildStdlibFromFiles` の 0x00 セパレータ検証なし | 🔴 High | ✅ 対応済み |
 | 12 | `BiIndex`/`StdlibIndex` のメソッドに nil レシーバーチェックなし | 🔴 High | ✅ 対応済み |
 | 13 | デシリアライズ時の長さフィールド検証が不十分 | 🔴 High | ⚠️ 部分対応 |

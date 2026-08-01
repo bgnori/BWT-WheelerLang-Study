@@ -13,7 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	bwtsearch "github.com/bgnori/bwt-wheelerlang-study"
+	bwtsearch "github.com/bgnori/textindex"
 	"golang.org/x/term"
 )
 

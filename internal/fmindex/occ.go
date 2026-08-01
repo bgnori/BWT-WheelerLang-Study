@@ -1,10 +1,10 @@
 package fmindex
 
 import (
-	"github.com/bgnori/bwt-wheelerlang-study/internal/bitvector"
-	"github.com/bgnori/bwt-wheelerlang-study/internal/rindex"
-	"github.com/bgnori/bwt-wheelerlang-study/internal/wavelet"
-	"github.com/bgnori/bwt-wheelerlang-study/internal/waveletmatrix"
+	"github.com/bgnori/textindex/internal/bitvector"
+	"github.com/bgnori/textindex/internal/rindex"
+	"github.com/bgnori/textindex/internal/wavelet"
+	"github.com/bgnori/textindex/internal/waveletmatrix"
 )
 
 // OccStructure selects the occurrence-array implementation used inside an

@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/bgnori/bwt-wheelerlang-study/internal/bitvector"
+	"github.com/bgnori/textindex/internal/bitvector"
 )
 
 const levels = 8 // log2(256) for byte alphabet
