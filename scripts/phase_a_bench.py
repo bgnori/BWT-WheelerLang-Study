@@ -7,7 +7,8 @@ This script implements the core workflow described in docs/performance_plan_phas
 - collect build/search timings, RSS estimates, and CSV output
 
 Usage examples:
-  python3 scripts/phase_a_bench.py --stage screening
+    python3 scripts/phase_a_bench.py --stage phase-a
+    python3 scripts/phase_a_bench.py --stage occ-precheck
   python3 scripts/phase_a_bench.py --stage full --output data/phase_a_results.csv
 """
 
@@ -15,8 +16,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import os
-import shutil
 import statistics
 import subprocess
 import sys
@@ -77,6 +78,21 @@ DATASETS = {
     },
 }
 
+CORE_CONFIGS = [
+    {"name": "rlbwt", "backend": "fm", "occ": "rlbwt", "algo": "sais"},
+    {"name": "bitvectors", "backend": "fm", "occ": "bitvectors", "algo": "sais"},
+    {"name": "waveletmatrix", "backend": "fm", "occ": "waveletmatrix", "algo": "sais"},
+]
+
+NEW_OCC_CONFIGS = [
+    {"name": "rrr", "backend": "fm", "occ": "rrr", "algo": "sais"},
+    {"name": "eliasfano", "backend": "fm", "occ": "eliasfano", "algo": "sais"},
+    {"name": "poppy", "backend": "fm", "occ": "poppy", "algo": "sais"},
+    {"name": "dynamic", "backend": "fm", "occ": "dynamic", "algo": "sais"},
+]
+
+SUFFIXARRAY_CONFIG = {"name": "suffixarray", "backend": "suffixarray", "occ": "suffixarray", "algo": "suffixarray"}
+
 
 class BenchError(RuntimeError):
     pass
@@ -102,23 +118,18 @@ def iter_input_files(dataset: str) -> List[Path]:
 
 
 def config_list(stage: str) -> List[Dict[str, str]]:
-    core = [
-        {"name": "rlbwt", "backend": "fm", "occ": "rlbwt", "algo": "sais"},
-        {"name": "bitvectors", "backend": "fm", "occ": "bitvectors", "algo": "sais"},
-        {"name": "waveletmatrix", "backend": "fm", "occ": "waveletmatrix", "algo": "sais"},
-    ]
-    new_occ = [
-        {"name": "rrr", "backend": "fm", "occ": "rrr", "algo": "sais"},
-        {"name": "eliasfano", "backend": "fm", "occ": "eliasfano", "algo": "sais"},
-        {"name": "poppy", "backend": "fm", "occ": "poppy", "algo": "sais"},
-        {"name": "dynamic", "backend": "fm", "occ": "dynamic", "algo": "sais"},
-    ]
     if stage == "screening":
-        return core + new_occ
+        # Backward-compatible alias: phase-a now represents the unified core run.
+        stage = "phase-a"
+    if stage == "phase-a":
+        return CORE_CONFIGS + [SUFFIXARRAY_CONFIG]
     if stage == "expand":
-        return new_occ
+        # Backward-compatible alias used by older invocations.
+        return NEW_OCC_CONFIGS
     if stage == "full":
-        return core + new_occ + [{"name": "suffixarray", "backend": "suffixarray", "occ": "suffixarray", "algo": "suffixarray"}]
+        return CORE_CONFIGS + NEW_OCC_CONFIGS + [SUFFIXARRAY_CONFIG]
+    if stage == "occ-precheck":
+        return NEW_OCC_CONFIGS
     raise BenchError(f"unknown stage: {stage}")
 
 
@@ -141,25 +152,6 @@ def read_rss_kb(pid: int) -> int:
     return 0
 
 
-def run_process(cmd: List[str], cwd: Path) -> Tuple[int, str, int]:
-    start = time.perf_counter()
-    proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    peak_rss_kb = 0
-    while True:
-        if proc.poll() is not None:
-            break
-        peak_rss_kb = max(peak_rss_kb, read_rss_kb(proc.pid))
-        time.sleep(0.1)
-    if proc.stdout is not None:
-        output = proc.stdout.read()
-    else:
-        output = ""
-    elapsed_sec = time.perf_counter() - start
-    if proc.returncode != 0:
-        raise BenchError(f"command failed ({proc.returncode}): {' '.join(cmd)}\n{output}")
-    return proc.returncode, output, int(max(peak_rss_kb, read_rss_kb(proc.pid)))
-
-
 def run_build(dataset: str, config: Dict[str, str], output_path: Path) -> Tuple[float, int, int]:
     info = DATASETS[dataset]
     input_path = info["input"]
@@ -175,9 +167,7 @@ def run_build(dataset: str, config: Dict[str, str], output_path: Path) -> Tuple[
         else:
             cmd = [str(BINARY), "build-multi", "--algo", config["algo"], "--occ", config["occ"], str(output_path)] + [str(p) for p in files]
 
-    _, _, peak_rss_kb = run_process(cmd, REPO_ROOT)
-    elapsed = 0.0
-    # measure elapsed separately with a fresh run to ensure timing is recorded
+    # One build run per repeat: capture elapsed + peak RSS together.
     start = time.perf_counter()
     proc = subprocess.Popen(cmd, cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     peak = 0
@@ -193,10 +183,25 @@ def run_build(dataset: str, config: Dict[str, str], output_path: Path) -> Tuple[
     return elapsed, peak, int(os.path.getsize(output_path) if output_path.exists() else 0)
 
 
+def percentile(values: List[float], p: float) -> float:
+    if not values:
+        raise BenchError("cannot compute percentile of empty values")
+    if len(values) == 1:
+        return values[0]
+    ordered = sorted(values)
+    rank = (len(ordered) - 1) * p
+    low = int(math.floor(rank))
+    high = int(math.ceil(rank))
+    if low == high:
+        return ordered[low]
+    weight = rank - low
+    return ordered[low] + (ordered[high] - ordered[low]) * weight
+
+
 def run_search(dataset: str, config: Dict[str, str], index_path: Path, query_type: str, query: str, run_count: int) -> Tuple[List[float], int, int]:
     if maybe_skip_query(query_type, config["backend"]):
         return [], 0, 0
-    cmd = [str(BINARY), "search", "--limit", "1000", str(index_path), query]
+    cmd = [str(BINARY), "search", "--positions", "--limit", "1000", str(index_path), query]
     per_run_ms: List[float] = []
     peak_rss_values: List[int] = []
     hits_values: List[int] = []
@@ -214,25 +219,32 @@ def run_search(dataset: str, config: Dict[str, str], index_path: Path, query_typ
         if proc.returncode != 0:
             raise BenchError(f"search failed: {' '.join(cmd)}\n{output}")
         hit_count = len([line for line in output.splitlines() if line.strip() and not line.startswith("warning:")])
+        if i == 0 and query_type == "exact_miss" and hit_count != 0:
+            raise BenchError(f"zero-hit query unexpectedly matched: dataset={dataset} query={query} hits={hit_count}")
         per_run_ms.append(elapsed_ms)
         peak_rss_values.append(peak)
         hits_values.append(hit_count)
     return per_run_ms, int(statistics.median(peak_rss_values)), int(statistics.median(hits_values))
 
 
-def preflight_query(dataset: str, query_type: str, query: str, config: Dict[str, str]) -> None:
-    if query_type != "exact_miss":
-        return
+def dataset_size_bytes(dataset: str) -> int:
     info = DATASETS[dataset]
-    index_path = OUTPUT_DIR / f"{dataset}_{config['name']}.idx"
-    if not index_path.exists():
-        raise BenchError(f"index missing for preflight: {index_path}")
-    cmd = [str(BINARY), "search", "--limit", "100", str(index_path), query]
-    proc = subprocess.run(cmd, cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
-    output = proc.stdout or ""
-    hit_count = len([line for line in output.splitlines() if line.strip() and not line.startswith("warning:")])
-    if hit_count != 0:
-        raise BenchError(f"zero-hit query unexpectedly matched: dataset={dataset} query={query} hits={hit_count}")
+    if info["mode"] == "single":
+        return int(info["input"].stat().st_size) if info["input"].exists() else 0
+    return int(sum(path.stat().st_size for path in iter_input_files(dataset) if path.exists()))
+
+
+def run_occ_precheck(dataset: str) -> None:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    query = DATASETS[dataset]["queries"][0][1]
+    for config in NEW_OCC_CONFIGS:
+        index_path = OUTPUT_DIR / f"_occ_precheck_{dataset}_{config['name']}.idx"
+        if index_path.exists():
+            index_path.unlink()
+        run_build(dataset, config, index_path)
+        run_search(dataset, config, index_path, "exact_high", query, run_count=1)
+        if index_path.exists():
+            index_path.unlink()
 
 
 def benchmark_dataset(dataset: str, stage: str, output_rows: List[Dict[str, object]], build_repeats: int) -> None:
@@ -240,10 +252,6 @@ def benchmark_dataset(dataset: str, stage: str, output_rows: List[Dict[str, obje
     info = DATASETS[dataset]
     for config in config_list(stage):
         index_path = OUTPUT_DIR / f"{dataset}_{config['name']}.idx"
-        if config["backend"] == "suffixarray" and stage != "full":
-            continue
-        if config["backend"] != "suffixarray" and not index_path.exists():
-            pass
         # build repeated
         build_elapsed_values = []
         build_peak_values = []
@@ -262,16 +270,15 @@ def benchmark_dataset(dataset: str, stage: str, output_rows: List[Dict[str, obje
         for query_type, query in info["queries"]:
             if maybe_skip_query(query_type, config["backend"]):
                 continue
-            preflight_query(dataset, query_type, query, config)
             per_run_ms, search_peak_rss_kb, hits = run_search(dataset, config, index_path, query_type, query, run_count=10)
             if not per_run_ms:
                 continue
             search_p50_ms = round(statistics.median(per_run_ms), 3)
-            search_p95_ms = round(statistics.quantiles(per_run_ms, n=20)[-1], 3) if len(per_run_ms) >= 20 else round(max(per_run_ms), 3)
+            search_p95_ms = round(percentile(per_run_ms, 0.95), 3)
             search_elapsed_ms = round(per_run_ms[0], 3)
             row = {
                 "dataset": dataset,
-                "dataset_bytes": int(info["input"].stat().st_size) if info["input"].exists() else 0,
+                "dataset_bytes": dataset_size_bytes(dataset),
                 "algo": config["algo"],
                 "occ": config["occ"],
                 "backend": config["backend"],
@@ -294,7 +301,7 @@ def benchmark_dataset(dataset: str, stage: str, output_rows: List[Dict[str, obje
             warm_runs = per_run_ms[1:]
             if warm_runs:
                 warm_p50 = round(statistics.median(warm_runs), 3)
-                warm_p95 = round(statistics.quantiles(warm_runs, n=20)[-1], 3) if len(warm_runs) >= 20 else round(max(warm_runs), 3)
+                warm_p95 = round(percentile(warm_runs, 0.95), 3)
                 warm_elapsed = round(warm_runs[0], 3)
                 warm_row = dict(row)
                 warm_row["search_mode"] = "warm"
@@ -333,10 +340,11 @@ def write_csv(rows: List[Dict[str, object]], output_path: Path) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the Phase A benchmark workflow")
-    parser.add_argument("--stage", choices=["screening", "expand", "full"], default="screening")
+    parser.add_argument("--stage", choices=["phase-a", "full", "occ-precheck", "screening", "expand"], default="phase-a")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--build-repeats", type=int, default=3)
     parser.add_argument("--datasets", nargs="*", choices=list(DATASETS.keys()), default=list(DATASETS.keys()))
+    parser.add_argument("--precheck-dataset", choices=list(DATASETS.keys()), default="mobydick")
     return parser.parse_args()
 
 
@@ -344,6 +352,10 @@ def main() -> int:
     args = parse_args()
     ensure_binary()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    if args.stage == "occ-precheck":
+        run_occ_precheck(args.precheck_dataset)
+        print(f"occ precheck passed on dataset={args.precheck_dataset}")
+        return 0
     rows: List[Dict[str, object]] = []
     for dataset in args.datasets:
         benchmark_dataset(dataset, args.stage, rows, build_repeats=args.build_repeats)

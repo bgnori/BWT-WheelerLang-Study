@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import statistics
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -26,9 +28,29 @@ def summarize(path: Path) -> None:
         if not ds_rows:
             continue
         print(f"[{dataset}]")
+
+        grouped: Dict[Tuple[str, str, str], List[Dict[str, str]]] = defaultdict(list)
+        for row in ds_rows:
+            key = (row["algo"], row["backend"], row["occ"])
+            grouped[key].append(row)
+
+        reduced: List[Dict[str, float]] = []
+        for (algo, backend, occ), group in grouped.items():
+            reduced.append(
+                {
+                    "algo": algo,
+                    "backend": backend,
+                    "occ": occ,
+                    "search_p50_ms": float(statistics.median(float(r["search_p50_ms"]) for r in group)),
+                    "search_p95_ms": float(statistics.median(float(r["search_p95_ms"]) for r in group)),
+                    "search_peak_rss_kb": float(statistics.median(float(r["search_peak_rss_kb"]) for r in group)),
+                    "index_bytes": float(statistics.median(float(r["index_bytes"]) for r in group)),
+                }
+            )
+
         for metric in ("search_p50_ms", "search_p95_ms", "search_peak_rss_kb", "index_bytes"):
-            best = min(ds_rows, key=lambda r: float(r[metric]))
-            print(f"  best {metric}: {best['occ']} ({best['backend']}) -> {best[metric]}")
+            best = min(reduced, key=lambda r: r[metric])
+            print(f"  best {metric}: {best['occ']} ({best['backend']}, {best['algo']}) -> {best[metric]:.3f}")
         print()
 
 

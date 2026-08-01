@@ -134,24 +134,24 @@ Phase C（external storage 詳細比較）は本ドキュメントの対象外�
 - 検索ケース（OR, FMのみ）: 4 datasets x 7 fm-configs x 1 query = 28
 
 合計 156 条件。
-これを 2 段階で実行する。
 
-1. スクリーニング: 新Occ 4種はまず `MobyDick` と `GitSource` のみ
-2. 拡張: 有望な新Occのみ `Kenshin` と `Ecoli` へ展開
+補足:
 
-この分割により、初手の計測量を抑えつつ新Occの当たりを得る。
+- 改定Aでは旧A/Bの分割を廃止し、比較本体は単一の Phase A として実施する。
+- 新Occ（`rrr`, `eliasfano`, `poppy`, `dynamic`）は、本計測の前に別途プレチェックを行う。
 
 ## 実行順序（推奨）
 
-1. 比較本体 4 構成を 4 データセットで一巡
-2. 新Occ 4 構成を `MobyDick` と `GitSource` に限定して追加
-3. 新Occの上位 1〜2 構成のみ `Kenshin` と `Ecoli` に展開
+1. 新Occ 4 構成のプレチェック（ビルド + 高頻度クエリ 1 回）
+2. 比較本体（`rlbwt`, `bitvectors`, `waveletmatrix`, `suffixarray`）を 4 データセットで実行
+3. 必要に応じて新Occを含む拡張実行（`--stage full`）
 4. 集計して「速度優先」「メモリ優先」「サイズ優先」の候補を各 1 つ選定
 
 ## 実行ハンドル
 
 - 各実験は同一のラッパーから起動し、構築・検索・CSV 収集を一元管理する。
 - 目標として `make bench-phase-a` もしくは `scripts/run_phase_a_bench.sh` のような単一エントリポイントを用意し、実行内容を再現可能にする。
+- 新Occ の事前確認は `make bench-phase-a-occ-precheck`（または `--stage occ-precheck`）で別途実施する。
 - 1 条件ごとに `run_id` を付与し、再実行時にも差分を追えるようにしておく。
 
 ## 事前確認
