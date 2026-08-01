@@ -171,6 +171,7 @@ func TestPersistencePreservesAlgorithmForAppend(t *testing.T) {
 		{"elias-fano", OccEliasFano},
 		{"poppy", OccPoppy},
 		{"dynamic-bitvectors", OccDynamicBitvectors},
+		{"wavelet-external", OccExternalWaveletTree},
 	}
 
 	for _, tt := range tests {
@@ -900,6 +901,10 @@ func TestNumBWTRunsAndOccType(t *testing.T) {
 	idxDyn := BuildWithOptions(text, AlgorithmDoubling, OccDynamicBitvectors)
 	if got := idxDyn.OccType(); got != OccDynamicBitvectors {
 		t.Errorf("OccType = %v, want OccDynamicBitvectors", got)
+	}
+	idxWTE := BuildWithOptions(text, AlgorithmDoubling, OccExternalWaveletTree)
+	if got := idxWTE.OccType(); got != OccExternalWaveletTree {
+		t.Errorf("OccType = %v, want OccExternalWaveletTree", got)
 	}
 	// NumBWTRuns: alternating text should have more runs than repetitive.
 	idxAlt := BuildWithOptions([]byte("ababababab"), AlgorithmDoubling, OccRLBWT)

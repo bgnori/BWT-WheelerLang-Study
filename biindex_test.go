@@ -57,6 +57,25 @@ func TestBuildWithOptionsWaveletMatrixPersistence(t *testing.T) {
 	}
 }
 
+func TestBuildWithOptionsWaveletExternalPersistenceAPI(t *testing.T) {
+	idx := BuildWithOptions([]byte("abracadabra"), AlgorithmSAIS, OccExternalWaveletTree)
+
+	var buf bytes.Buffer
+	if _, err := idx.WriteTo(&buf); err != nil {
+		t.Fatalf("WriteTo failed: %v", err)
+	}
+	loaded, err := ReadFrom(&buf)
+	if err != nil {
+		t.Fatalf("ReadFrom failed: %v", err)
+	}
+	if got := loaded.Count([]byte("abra")); got != 2 {
+		t.Fatalf("Count after reload = %d, want 2", got)
+	}
+	if got := loaded.OccType(); got != OccExternalWaveletTree {
+		t.Fatalf("OccType after reload = %v, want OccExternalWaveletTree", got)
+	}
+}
+
 // --- OccRLBWT tests --------------------------------------------------------
 
 func TestBuildWithOptionsRLBWT(t *testing.T) {

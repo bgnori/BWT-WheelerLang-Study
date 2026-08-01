@@ -226,6 +226,45 @@ func TestBuildWithOptionsWaveletPersistence(t *testing.T) {
 	}
 }
 
+func TestBuildWithOptionsWaveletExternalMatchesBitvectors(t *testing.T) {
+	text := []byte("the quick brown fox jumps over the lazy dog")
+	idxBV := Build(text)
+	idxWTE := BuildWithOptions(text, AlgorithmSAIS, OccExternalWaveletTree)
+
+	patterns := []string{"the", "fox", "quick", "xyz", "dog"}
+	for _, pat := range patterns {
+		p := []byte(pat)
+		if got, want := idxWTE.Count(p), idxBV.Count(p); got != want {
+			t.Errorf("Count(%q): wavelet-external=%d bitvectors=%d", pat, got, want)
+		}
+		posWTE := sortedInts(idxWTE.Locate(p, 0))
+		posBV := sortedInts(idxBV.Locate(p, 0))
+		if !intSliceEq(posWTE, posBV) {
+			t.Errorf("Locate(%q): wavelet-external=%v bitvectors=%v", pat, posWTE, posBV)
+		}
+	}
+}
+
+func TestBuildWithOptionsWaveletExternalPersistence(t *testing.T) {
+	idx := BuildWithOptions([]byte("abracadabra"), AlgorithmSAIS, OccExternalWaveletTree)
+
+	var buf bytes.Buffer
+	if _, err := idx.WriteTo(&buf); err != nil {
+		t.Fatalf("WriteTo failed: %v", err)
+	}
+
+	loaded, err := ReadFrom(&buf)
+	if err != nil {
+		t.Fatalf("ReadFrom failed: %v", err)
+	}
+	if got := loaded.Count([]byte("abra")); got != 2 {
+		t.Fatalf("Count after reload = %d, want 2", got)
+	}
+	if got := loaded.OccType(); got != OccExternalWaveletTree {
+		t.Fatalf("OccType after reload = %v, want OccExternalWaveletTree", got)
+	}
+}
+
 func TestBuildWithOptionsEliasFano(t *testing.T) {
 	idx := BuildWithOptions([]byte("abracadabra"), AlgorithmDoubling, OccEliasFano)
 

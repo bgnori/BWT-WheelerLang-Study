@@ -22,7 +22,7 @@ textindex <command> [args]
 
 ```bash
 textindex build [--algo doubling|sais|suffixarray|bifmindex] \
-  [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] <input-file> <index-file>
+  [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic|wavelet-external] <input-file> <index-file>
 ```
 
 - `--algo`（既定: `sais`）
@@ -39,6 +39,7 @@ textindex build [--algo doubling|sais|suffixarray|bifmindex] \
   - `eliasfano`
   - `poppy`（Interleaved RRR）
   - `dynamic`（Dynamic Bit Vector）
+  - `wavelet-external`（外部記憶対応 Wavelet Tree）
 
 例:
 
@@ -55,7 +56,7 @@ textindex build --algo bifmindex --occ rlbwt data/moby_dick.txt data/moby_dick.b
 
 ```bash
 textindex build-multi [--algo doubling|sais|suffixarray|bifmindex] \
-  [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] <index-file> <file1> [file2 ...]
+  [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic|wavelet-external] <index-file> <file1> [file2 ...]
 ```
 
 入力ファイルは内部で連結されます（既定セパレータは改行）。

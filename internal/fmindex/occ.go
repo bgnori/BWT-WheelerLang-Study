@@ -46,6 +46,10 @@ const (
 	// over the BWT. Indexes built with this option use the FMIDX12 on-disk
 	// format.
 	OccDynamicBitvectors
+	// OccExternalWaveletTree uses an external-memory Wavelet Tree over the BWT.
+	// Node bit-vectors are stored in temporary files with in-memory rank
+	// summaries. Indexes built with this option use the FMIDX13 on-disk format.
+	OccExternalWaveletTree
 )
 
 // occStructure is the internal interface for occurrence-array implementations.
@@ -60,6 +64,8 @@ func buildOcc(bwt []byte, typ OccStructure) occStructure {
 		return &waveletOcc{tree: wavelet.Build(bwt)}
 	case OccWaveletMatrix:
 		return &waveletMatrixOcc{mat: waveletmatrix.Build(bwt)}
+	case OccExternalWaveletTree:
+		return &externalWaveletOcc{tree: wavelet.BuildExternal(bwt)}
 	case OccRLBWT:
 		return &rlbwtOcc{rl: rindex.Build(bwt)}
 	case OccRRR:
@@ -221,6 +227,18 @@ type waveletMatrixOcc struct {
 
 func (o *waveletMatrixOcc) rank(b byte, i int) int {
 	return o.mat.Rank(b, i)
+}
+
+// ── externalWaveletOcc ───────────────────────────────────────────────────────
+
+// externalWaveletOcc implements occStructure using an external-memory
+// Wavelet Tree.
+type externalWaveletOcc struct {
+	tree *wavelet.ExternalTree
+}
+
+func (o *externalWaveletOcc) rank(b byte, i int) int {
+	return o.tree.Rank(b, i)
 }
 
 // ── rlbwtOcc ──────────────────────────────────────────────────────────────────

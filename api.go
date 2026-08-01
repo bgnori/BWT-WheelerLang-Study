@@ -98,6 +98,10 @@ const (
 	// over the BWT. Indexes built with this option use the FMIDX12 on-disk
 	// format.
 	OccDynamicBitvectors OccStructure = OccStructure(fmindex.OccDynamicBitvectors)
+	// OccExternalWaveletTree uses an external-memory Wavelet Tree over the BWT.
+	// Node bit-vectors are stored in temporary files while rank summaries stay
+	// in memory. Indexes built with this option use the FMIDX13 on-disk format.
+	OccExternalWaveletTree OccStructure = OccStructure(fmindex.OccExternalWaveletTree)
 )
 
 // Interval is a half-open suffix-array range [Lo, Hi).
