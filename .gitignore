@@ -31,6 +31,16 @@ go.work.sum
 # env file
 .env
 
+# Generated index artifacts
+*.idx
+*.saidx
+
+# Python cache/bytecode artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
 # Editor/IDE
 # .idea/
 # .vscode/
