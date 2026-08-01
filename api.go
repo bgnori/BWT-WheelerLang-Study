@@ -86,6 +86,10 @@ const (
 	// over the BWT. Indexes built with this option use the FMIDX09 on-disk
 	// format.
 	OccRRR OccStructure = OccStructure(fmindex.OccRRR)
+	// OccEliasFano uses one Elias-Fano encoded position list per distinct
+	// character over the BWT. Indexes built with this option use the FMIDX10
+	// on-disk format.
+	OccEliasFano OccStructure = OccStructure(fmindex.OccEliasFano)
 )
 
 // Interval is a half-open suffix-array range [Lo, Hi).

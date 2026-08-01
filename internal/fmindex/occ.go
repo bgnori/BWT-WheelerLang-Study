@@ -34,6 +34,10 @@ const (
 	// OccRRR uses one RRR bit-vector per distinct character over the BWT.
 	// Indexes built with this option use the FMIDX09 on-disk format.
 	OccRRR
+	// OccEliasFano uses one Elias-Fano encoded position list per distinct
+	// character over the BWT. Indexes built with this option use the FMIDX10
+	// on-disk format.
+	OccEliasFano
 )
 
 // occStructure is the internal interface for occurrence-array implementations.
@@ -52,6 +56,8 @@ func buildOcc(bwt []byte, typ OccStructure) occStructure {
 		return &rlbwtOcc{rl: rindex.Build(bwt)}
 	case OccRRR:
 		return buildRRROcc(bwt)
+	case OccEliasFano:
+		return buildEliasFanoOcc(bwt)
 	default:
 		return buildBitvecOcc(bwt)
 	}

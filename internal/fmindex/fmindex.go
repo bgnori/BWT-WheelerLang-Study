@@ -428,15 +428,16 @@ func buildSuffixArray(text []byte) []int {
 
 // --- Persistence -----------------------------------------------------------
 
-const magic = "FMIDX01"   // bitvector-based occ
-const magicV2 = "FMIDX02" // wavelet-tree-based occ (occ rebuilt from BWT on load)
-const magicV3 = "FMIDX03" // wavelet-matrix-based occ (occ rebuilt from BWT on load)
-const magicV4 = "FMIDX04" // RLBWT-based occ (occ rebuilt from BWT on load)
-const magicV5 = "FMIDX05" // bitvector-based occ with construction algorithm
-const magicV6 = "FMIDX06" // wavelet-tree-based occ with construction algorithm
-const magicV7 = "FMIDX07" // wavelet-matrix-based occ with construction algorithm
-const magicV8 = "FMIDX08" // RLBWT-based occ with construction algorithm
-const magicV9 = "FMIDX09" // RRR-based occ with construction algorithm
+const magic = "FMIDX01"    // bitvector-based occ
+const magicV2 = "FMIDX02"  // wavelet-tree-based occ (occ rebuilt from BWT on load)
+const magicV3 = "FMIDX03"  // wavelet-matrix-based occ (occ rebuilt from BWT on load)
+const magicV4 = "FMIDX04"  // RLBWT-based occ (occ rebuilt from BWT on load)
+const magicV5 = "FMIDX05"  // bitvector-based occ with construction algorithm
+const magicV6 = "FMIDX06"  // wavelet-tree-based occ with construction algorithm
+const magicV7 = "FMIDX07"  // wavelet-matrix-based occ with construction algorithm
+const magicV8 = "FMIDX08"  // RLBWT-based occ with construction algorithm
+const magicV9 = "FMIDX09"  // RRR-based occ with construction algorithm
+const magicV10 = "FMIDX10" // Elias-Fano-based occ with construction algorithm
 
 // countingWriter wraps an io.Writer and tracks the total bytes written.
 type countingWriter struct {
@@ -456,6 +457,7 @@ func (cw *countingWriter) Write(p []byte) (int, error) {
 // Wavelet-matrix-based indexes use the FMIDX07 format.
 // RLBWT-based indexes use the FMIDX08 format.
 // RRR-based indexes use the FMIDX09 format.
+// Elias-Fano-based indexes use the FMIDX10 format.
 // It implements io.WriterTo.
 func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 	switch idx.occ.(type) {
@@ -467,6 +469,8 @@ func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 		return idx.writeToRebuildOcc(w, magicV8)
 	case *rrrOcc:
 		return idx.writeToRebuildOcc(w, magicV9)
+	case *eliasFanoOcc:
+		return idx.writeToRebuildOcc(w, magicV10)
 	default:
 		return idx.writeToBitvectors(w)
 	}
@@ -543,7 +547,8 @@ func (idx *Index) writeToBitvectors(w io.Writer) (int64, error) {
 
 // writeToRebuildOcc writes a format where the occurrence array is NOT stored
 // on disk and is instead reconstructed from the BWT on load.  This is used by
-// FMIDX06 (wavelet tree), FMIDX07 (wavelet matrix), and FMIDX08 (RLBWT).
+// FMIDX06 (wavelet tree), FMIDX07 (wavelet matrix), FMIDX08 (RLBWT),
+// FMIDX09 (RRR), and FMIDX10 (Elias-Fano).
 func (idx *Index) writeToRebuildOcc(w io.Writer, hdrMagic string) (int64, error) {
 	cw := &countingWriter{w: w}
 	bw := bufio.NewWriterSize(cw, 1<<20)
@@ -609,7 +614,7 @@ func writeAlgorithm(w *bufio.Writer, algo SuffixArrayAlgorithm) error {
 // ReadFrom deserialises an index from r.
 // FMIDX01 (bitvectors), FMIDX02 (wavelet tree), FMIDX03 (wavelet matrix),
 // and FMIDX04 (RLBWT) legacy formats are supported as doubling indexes.
-// FMIDX05 through FMIDX09 additionally retain the construction algorithm.
+// FMIDX05 through FMIDX10 additionally retain the construction algorithm.
 func ReadFrom(r io.Reader) (*Index, error) {
 	br := bufio.NewReaderSize(r, 1<<20)
 
@@ -626,7 +631,7 @@ func ReadFrom(r io.Reader) (*Index, error) {
 		return readFromRebuildOcc(br, AlgorithmDoubling, OccWaveletMatrix)
 	case magicV4:
 		return readFromRebuildOcc(br, AlgorithmDoubling, OccRLBWT)
-	case magicV5, magicV6, magicV7, magicV8, magicV9:
+	case magicV5, magicV6, magicV7, magicV8, magicV9, magicV10:
 		algo, err := readAlgorithm(br)
 		if err != nil {
 			return nil, err
@@ -640,6 +645,8 @@ func ReadFrom(r io.Reader) (*Index, error) {
 			return readFromRebuildOcc(br, algo, OccWaveletMatrix)
 		case magicV9:
 			return readFromRebuildOcc(br, algo, OccRRR)
+		case magicV10:
+			return readFromRebuildOcc(br, algo, OccEliasFano)
 		default:
 			return readFromRebuildOcc(br, algo, OccRLBWT)
 		}

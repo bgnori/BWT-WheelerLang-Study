@@ -168,6 +168,7 @@ func TestPersistencePreservesAlgorithmForAppend(t *testing.T) {
 		{"wavelet-matrix", OccWaveletMatrix},
 		{"rlbwt", OccRLBWT},
 		{"rrr", OccRRR},
+		{"elias-fano", OccEliasFano},
 	}
 
 	for _, tt := range tests {
@@ -689,6 +690,67 @@ func TestRRRPersistence(t *testing.T) {
 	}
 }
 
+// --- Elias-Fano tests ------------------------------------------------------
+
+func TestEliasFanoMatchesBitvectors(t *testing.T) {
+	texts := []string{
+		"banana",
+		"mississippi",
+		"abracadabra",
+		"the quick brown fox jumps over the lazy dog",
+		"aaaaabbbbbccccc",
+		"aaaaaaaaaa",
+		"",
+	}
+	patterns := []string{"a", "an", "the", "ab", "ccc", "xyz", "aa"}
+
+	for _, textStr := range texts {
+		text := []byte(textStr)
+		idxBV := Build(text)
+		idxEF := BuildWithOptions(text, AlgorithmDoubling, OccEliasFano)
+
+		for _, pat := range patterns {
+			p := []byte(pat)
+			if gotBV, gotEF := idxBV.Count(p), idxEF.Count(p); gotBV != gotEF {
+				t.Errorf("text=%q pat=%q: bitvectors=%d eliasfano=%d", textStr, pat, gotBV, gotEF)
+			}
+			posBV := sortedPositions(idxBV.Locate(p, 0))
+			posEF := sortedPositions(idxEF.Locate(p, 0))
+			if !intSliceEqual(posBV, posEF) {
+				t.Errorf("text=%q pat=%q: bitvectors locate=%v eliasfano locate=%v",
+					textStr, pat, posBV, posEF)
+			}
+		}
+	}
+}
+
+func TestEliasFanoPersistence(t *testing.T) {
+	text := []byte("the quick brown fox jumps over the lazy dog")
+	idx := BuildWithOptions(text, AlgorithmSAIS, OccEliasFano)
+
+	var buf bytes.Buffer
+	if _, err := idx.WriteTo(&buf); err != nil {
+		t.Fatal("WriteTo:", err)
+	}
+	idx2, err := ReadFrom(&buf)
+	if err != nil {
+		t.Fatal("ReadFrom:", err)
+	}
+
+	patterns := []string{"the", "fox", "dog", "quick", "xyz"}
+	for _, pat := range patterns {
+		p := []byte(pat)
+		if c1, c2 := idx.Count(p), idx2.Count(p); c1 != c2 {
+			t.Errorf("after eliasfano persistence, Count(%q): %d vs %d", pat, c1, c2)
+		}
+		pos1 := sortedPositions(idx.Locate(p, 0))
+		pos2 := sortedPositions(idx2.Locate(p, 0))
+		if !intSliceEqual(pos1, pos2) {
+			t.Errorf("after eliasfano persistence, Locate(%q): %v vs %v", pat, pos1, pos2)
+		}
+	}
+}
+
 func TestNumBWTRunsAndOccType(t *testing.T) {
 	text := []byte("mississippi")
 	idxWM := BuildWithOptions(text, AlgorithmDoubling, OccWaveletMatrix)
@@ -702,6 +764,10 @@ func TestNumBWTRunsAndOccType(t *testing.T) {
 	idxRRR := BuildWithOptions(text, AlgorithmDoubling, OccRRR)
 	if got := idxRRR.OccType(); got != OccRRR {
 		t.Errorf("OccType = %v, want OccRRR", got)
+	}
+	idxEF := BuildWithOptions(text, AlgorithmDoubling, OccEliasFano)
+	if got := idxEF.OccType(); got != OccEliasFano {
+		t.Errorf("OccType = %v, want OccEliasFano", got)
 	}
 	// NumBWTRuns: alternating text should have more runs than repetitive.
 	idxAlt := BuildWithOptions([]byte("ababababab"), AlgorithmDoubling, OccRLBWT)
