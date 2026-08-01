@@ -77,17 +77,17 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  --algo doubling|sais      FM-index with doubling or SA-IS suffix array")
 	fmt.Fprintln(os.Stderr, "  --algo suffixarray        stdlib suffix array (literal patterns only)")
 	fmt.Fprintln(os.Stderr, "  --algo bifmindex          bidirectional FM-index (--occ applies)")
-	fmt.Fprintln(os.Stderr, "  --occ bitvectors          per-character bit-vectors (default, FMIDX05)")
+	fmt.Fprintln(os.Stderr, "  --occ bitvectors          per-character bit-vectors (FMIDX05)")
 	fmt.Fprintln(os.Stderr, "  --occ wavelet             Wavelet Tree (FMIDX06)")
 	fmt.Fprintln(os.Stderr, "  --occ waveletmatrix       Wavelet Matrix (FMIDX07)")
-	fmt.Fprintln(os.Stderr, "  --occ rlbwt               run-length BWT / r-index (FMIDX08)")
+	fmt.Fprintln(os.Stderr, "  --occ rlbwt               run-length BWT / r-index (default, FMIDX08)")
 }
 
 func runBuild(args []string) error {
 	fs := flag.NewFlagSet("build", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	algoFlag := fs.String("algo", "doubling", "suffix-array construction algorithm: doubling, sais, suffixarray, or bifmindex")
-	occFlag := fs.String("occ", "bitvectors", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, or rlbwt")
+	algoFlag := fs.String("algo", "sais", "suffix-array construction algorithm: doubling, sais, suffixarray, or bifmindex")
+	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, or rlbwt")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func runBuild(args []string) error {
 		if err != nil {
 			return err
 		}
-		idx := bwtsearch.BuildBiWithOptions(text, bwtsearch.AlgorithmDoubling, occ)
+		idx := bwtsearch.BuildBiWithOptions(text, bwtsearch.AlgorithmSAIS, occ)
 		if err := idx.Save(indexPath); err != nil {
 			return err
 		}
@@ -149,8 +149,8 @@ func runBuild(args []string) error {
 func runBuildMulti(args []string) error {
 	fs := flag.NewFlagSet("build-multi", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	algoFlag := fs.String("algo", "doubling", "suffix-array construction algorithm: doubling, sais, suffixarray, or bifmindex")
-	occFlag := fs.String("occ", "bitvectors", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, or rlbwt")
+	algoFlag := fs.String("algo", "sais", "suffix-array construction algorithm: doubling, sais, suffixarray, or bifmindex")
+	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, or rlbwt")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -181,7 +181,7 @@ func runBuildMulti(args []string) error {
 		if err != nil {
 			return err
 		}
-		idx := bwtsearch.BuildBiFromFilesWithOptions(texts, nil, bwtsearch.AlgorithmDoubling, occ)
+		idx := bwtsearch.BuildBiFromFilesWithOptions(texts, nil, bwtsearch.AlgorithmSAIS, occ)
 		if err := idx.Save(indexPath); err != nil {
 			return err
 		}
@@ -548,9 +548,9 @@ func searchAny(idx anyIndex, pattern string, limit int) (positions []int, trunca
 
 func parseAlgo(s string) (bwtsearch.SuffixArrayAlgorithm, error) {
 	switch strings.ToLower(s) {
-	case "doubling", "":
+	case "doubling":
 		return bwtsearch.AlgorithmDoubling, nil
-	case "sais":
+	case "sais", "":
 		return bwtsearch.AlgorithmSAIS, nil
 	default:
 		return 0, fmt.Errorf("unknown algorithm %q: choose doubling, sais, or suffixarray", s)
@@ -559,13 +559,13 @@ func parseAlgo(s string) (bwtsearch.SuffixArrayAlgorithm, error) {
 
 func parseOcc(s string) (bwtsearch.OccStructure, error) {
 	switch strings.ToLower(s) {
-	case "bitvectors", "bitvector", "":
+	case "bitvectors", "bitvector":
 		return bwtsearch.OccBitvectors, nil
 	case "wavelet", "wavelettree":
 		return bwtsearch.OccWaveletTree, nil
 	case "waveletmatrix", "wavelet-matrix", "wm":
 		return bwtsearch.OccWaveletMatrix, nil
-	case "rlbwt", "rindex", "r-index":
+	case "rlbwt", "rindex", "r-index", "":
 		return bwtsearch.OccRLBWT, nil
 	default:
 		return 0, fmt.Errorf("unknown occ structure %q: choose bitvectors, wavelet, waveletmatrix, or rlbwt", s)

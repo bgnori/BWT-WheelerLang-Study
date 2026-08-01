@@ -302,8 +302,8 @@ func TestJapaneseText(t *testing.T) {
 	}
 }
 
-// TestJapaneseTextSAIS confirms the SA-IS algorithm produces the same results
-// for Japanese input as the default doubling algorithm.
+// TestJapaneseTextSAIS confirms SA-IS and doubling produce the same results
+// for Japanese input.
 func TestJapaneseTextSAIS(t *testing.T) {
 	text := []byte("武田信玄と上杉謙信は戦国時代の名将である。上杉謙信は越後の虎と呼ばれた。")
 	pattern := []byte("上杉謙信")

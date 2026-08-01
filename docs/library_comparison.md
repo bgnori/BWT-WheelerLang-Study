@@ -36,7 +36,7 @@
 
 | | textindex | shenwei356/bwt | rossmerr/fm-index |
 |---|---|---|---|
-| **デフォルト** | Prefix-doubling法（Manber-Myers） O(n log² n) | Go標準 `index/suffixarray`（DC3/Skew） O(n log n) — reflectionで内部アクセス | 全サフィックス文字列を明示構築 + `sort.Strings` **O(n² log n)** |
+| **デフォルト** | SA-IS法 O(n)（Occ 既定: RLBWT） | Go標準 `index/suffixarray`（DC3/Skew） O(n log n) — reflectionで内部アクセス | 全サフィックス文字列を明示構築 + `sort.Strings` **O(n² log n)** |
 | **代替** | **SA-IS法 O(n)**（`AlgorithmSAIS`オプション） | なし | なし |
 | **備考** | ゼロコピー・番兵付き実装 | 標準ライブラリ活用だがreflection依存（将来のGoバージョンで壊れる可能性） | 実用上100KB超のテキストには不適 |
 

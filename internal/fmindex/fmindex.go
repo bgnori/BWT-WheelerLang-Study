@@ -57,24 +57,25 @@ type SuffixArrayAlgorithm int
 
 const (
 	// AlgorithmDoubling uses the prefix-doubling (Manber-Myers) algorithm
-	// with O(n log² n) time. This is the default.
+	// with O(n log² n) time.
 	AlgorithmDoubling SuffixArrayAlgorithm = iota
 	// AlgorithmSAIS uses the SA-IS (Suffix Array – Induced Sorting) algorithm
-	// by Nong, Zhang & Chan with O(n) time.
+	// by Nong, Zhang & Chan with O(n) time. This is the default.
 	AlgorithmSAIS
 )
 
-// Build constructs an FM-index from text using the default doubling algorithm.
+// Build constructs an FM-index from text using the default SA-IS algorithm
+// and RLBWT occurrence structure.
 // The text must not contain the null byte (0x00); it is reserved as sentinel.
 func Build(text []byte) *Index {
-	return BuildWithOptions(text, AlgorithmDoubling, OccBitvectors)
+	return BuildWithOptions(text, AlgorithmSAIS, OccRLBWT)
 }
 
 // BuildWithAlgorithm constructs an FM-index from text using the specified
 // suffix-array construction algorithm.
 // The text must not contain the null byte (0x00); it is reserved as sentinel.
 func BuildWithAlgorithm(text []byte, algo SuffixArrayAlgorithm) *Index {
-	return BuildWithOptions(text, algo, OccBitvectors)
+	return BuildWithOptions(text, algo, OccRLBWT)
 }
 
 // BuildWithOptions constructs an FM-index with an explicit suffix-array

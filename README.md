@@ -41,10 +41,10 @@ make search-demo-moby-dick
 
 FM-index 系 (`doubling` / `sais` / `bifmindex`) では Occ 構造を選択できます:
 
-- `--occ bitvectors`（既定）
+- `--occ bitvectors`
 - `--occ wavelet`
 - `--occ waveletmatrix`
-- `--occ rlbwt`
+- `--occ rlbwt`（既定）
 
 ## よく使うコマンド
 

@@ -5,6 +5,12 @@
 メモリ消費とインデックスファイルサイズの測定を追加したため、ベンチマークを再実行しました。  
 本レポートでは、従来の `go test -bench` による構築/検索比較に加えて、CLI 実行時の **ピークRSS（近似）** と **生成インデックスサイズ** を追記しています。
 
+注記（現行デフォルト）:
+
+- 現在の既定構成は **FM SA-IS + RLBWT**（`--algo sais --occ rlbwt`）です。
+- 本文の表には比較のため `Bitvectors` / `WaveletTree` / `WaveletMatrix` / `Doubling` / `BiFM` も併記しています。
+- したがって「最速値」と「既定値での挙動」は一致しない場合があります。運用判断時は `FM SA-IS + RLBWT` の行を基準に参照してください。
+
 対象コード: [`bench_test.go`](../bench_test.go), [`Makefile`](../Makefile)
 
 ---
@@ -234,8 +240,9 @@ $$
 ## 6) まとめ
 
 - **構築速度**: すべてのデータセットで Doubling は遅く、実用上は SA-IS 系が優位。
-- **検索速度（完全一致）**: `Bitvectors` と `BiFM(Bitvectors)` が最速帯。`WaveletTree/Matrix` は 1 桁以上遅い傾向。
-- **検索速度（正規表現）**: `Bitvectors` と `RLBWT` が近い性能で、`WaveletTree/Matrix` は遅め。
+- **検索速度（完全一致）**: `Bitvectors` と `BiFM(Bitvectors)` が最速帯。既定の `FM SA-IS + RLBWT` は最速ではないものの、`WaveletTree/Matrix` より高速なケースが多い。
+- **検索速度（正規表現）**: `Bitvectors` と `RLBWT` は近い性能帯で、`WaveletTree/Matrix` は遅め。
+- **表の読み方**: チューニング目的では「最速帯（主に Bitvectors/BiFM）」、デフォルト運用の見積もりでは「`FM SA-IS + RLBWT` の行」を参照する。
 - **FM vs Stdlib（go test）**: 構築では stdlib が有利だが、検索（特にログ系）では FM 系が大幅に高速。
 - **FM vs Stdlib（CLI 実測）**: FM/SAIS はインデックスサイズとピークRSSが大きくなる一方、データセットによっては検索時に有利（例: OsativaChr1）。
 - **MobyDick（CLI 実測）**: 構築は stdlib が軽量（6.3MB index, 16MB級RSS）で、検索は FM/SAIS がわずかに高速（0.069s vs 0.084s）。

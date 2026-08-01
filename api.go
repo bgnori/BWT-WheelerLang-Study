@@ -61,7 +61,7 @@ type OccStructure int
 
 const (
 	// OccBitvectors uses one succinct bit-vector per distinct character
-	// (default).  Indexes built with this option are written in the FMIDX05
+	// representation. Indexes built with this option are written in the FMIDX05
 	// on-disk format.
 	OccBitvectors OccStructure = OccStructure(fmindex.OccBitvectors)
 	// OccWaveletTree uses a Wavelet Tree over the BWT, providing O(log σ)
@@ -78,7 +78,7 @@ const (
 	// OccRLBWT uses a run-length encoded BWT for rank queries.  The BWT is
 	// stored as a compact sequence of equal-character runs, which is the
 	// foundation of r-index style compressed indexes.  Rank queries run in
-	// O(log r) time where r is the number of BWT runs.  This is
+	// O(log r) time where r is the number of BWT runs.  This is the default
 	// space-efficient for highly repetitive texts.
 	// Indexes built with this option use the FMIDX08 on-disk format.
 	OccRLBWT OccStructure = OccStructure(fmindex.OccRLBWT)
@@ -116,7 +116,8 @@ type Index struct {
 	inner *fmindex.Index
 }
 
-// Build constructs an index from text using the default algorithm.
+// Build constructs an index from text using the default SA-IS algorithm and
+// RLBWT occurrence structure.
 // Passing nil or an empty slice is valid and returns an index over the empty
 // text (sentinel only): Count reports 0 for any non-empty pattern, Search
 // finds no matches, TextLen is 0, and SALen is 1.

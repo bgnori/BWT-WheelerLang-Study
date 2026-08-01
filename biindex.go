@@ -61,7 +61,7 @@ type BiIndex struct {
 
 // BuildBi constructs a BiIndex from text using default options.
 func BuildBi(text []byte) *BiIndex {
-	return BuildBiWithOptions(text, AlgorithmDoubling, OccBitvectors)
+	return BuildBiWithOptions(text, AlgorithmSAIS, OccRLBWT)
 }
 
 // BuildBiWithOptions constructs a BiIndex with explicit suffix-array
@@ -80,7 +80,7 @@ func BuildBiWithOptions(text []byte, algo SuffixArrayAlgorithm, occ OccStructure
 //
 // BuildBiFromFiles panics if separator contains the byte 0x00.
 func BuildBiFromFiles(texts [][]byte, separator []byte) *BiIndex {
-	return BuildBiFromFilesWithOptions(texts, separator, AlgorithmDoubling, OccBitvectors)
+	return BuildBiFromFilesWithOptions(texts, separator, AlgorithmSAIS, OccRLBWT)
 }
 
 // BuildBiFromFilesWithOptions concatenates texts with separator and builds a

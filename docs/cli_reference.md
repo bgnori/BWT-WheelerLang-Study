@@ -25,12 +25,12 @@ textindex build [--algo doubling|sais|suffixarray|bifmindex] \
   [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <input-file> <index-file>
 ```
 
-- `--algo`（既定: `doubling`）
+- `--algo`（既定: `sais`）
   - `doubling`: FM-index（前置倍加法）
   - `sais`: FM-index（SA-IS）
   - `suffixarray`: Go 標準ライブラリ Suffix Array（リテラル検索専用）
   - `bifmindex`: 双方向 FM-index（リテラル検索）
-- `--occ`（既定: `bitvectors`）
+- `--occ`（既定: `rlbwt`）
   - `bitvectors`
   - `wavelet`
   - `waveletmatrix`

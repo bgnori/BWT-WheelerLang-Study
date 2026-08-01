@@ -18,6 +18,8 @@
 - `(*Index).SALen`, `(*Index).AlphabetSize`, `(*Index).OccType`, `(*Index).NumBWTRuns`
 - `Search`, `Check`
 
+`Build` / `BuildFromFiles` の既定値は `AlgorithmSAIS + OccRLBWT` です。
+
 ### Suffix Array（標準ライブラリ）
 
 - `BuildStdlib`, `BuildStdlibFromFiles`
@@ -33,6 +35,8 @@
 - `(*BiIndex).Save`, `(*BiIndex).WriteTo`
 - `(*BiIndex).Count`, `(*BiIndex).Locate`, `(*BiIndex).ContextAround`
 - `(*BiIndex).FullInterval`, `(*BiIndex).ExtendLeft`, `(*BiIndex).ExtendRight`
+
+`BuildBi` / `BuildBiFromFiles` の既定値は `AlgorithmSAIS + OccRLBWT` です。
 
 ### 型・定数
 
