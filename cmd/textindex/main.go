@@ -86,7 +86,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  --occ poppy               Poppy / interleaved RRR bit-vectors (FMIDX11)")
 	fmt.Fprintln(os.Stderr, "  --occ dynamic             Dynamic bit-vectors (FMIDX12)")
 	fmt.Fprintln(os.Stderr, "  --storage memory          in-memory occ structures (default)")
-	fmt.Fprintln(os.Stderr, "  --storage external        external-memory occ storage (currently wavelet only)")
+	fmt.Fprintln(os.Stderr, "  --storage external        external-memory occ storage (wavelet and bitvectors)")
 	fmt.Fprintln(os.Stderr, "  --external-strategy ...   lsm|bplustree|inverted for external wavelet storage")
 	fmt.Fprintln(os.Stderr, "  --disk-block-size BYTES   disk block size for external storage (default 4096)")
 }
@@ -693,7 +693,7 @@ func isLegacyWaveletExternalOcc(raw string) bool {
 }
 
 // loadAnyIndex opens path and returns the appropriate index type based on the
-// on-disk magic: FMIDX01 through FMIDX15 for FM-index variants, SAIDX01 for
+// on-disk magic: FMIDX01 through FMIDX16 for FM-index variants, SAIDX01 for
 // stdlib suffix array, BIDX001 for bidirectional FM-index.
 func loadAnyIndex(path string) (anyIndex, error) {
 	f, err := os.Open(path)

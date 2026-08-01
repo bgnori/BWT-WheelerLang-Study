@@ -165,6 +165,9 @@ func TestPersistencePreservesAlgorithmForAppend(t *testing.T) {
 		stor OccStorageOptions
 	}{
 		{"bitvectors", OccBitvectors, defaultOccStorageOptions()},
+		{"bitvectors-external-lsm", OccBitvectors, OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: 8192, ExternalStrategy: OccExternalStrategyLSM}},
+		{"bitvectors-external-bplustree", OccBitvectors, OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: 8192, ExternalStrategy: OccExternalStrategyBPlusTree}},
+		{"bitvectors-external-inverted", OccBitvectors, OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: 8192, ExternalStrategy: OccExternalStrategyInvertedSegments}},
 		{"wavelet", OccWaveletTree, defaultOccStorageOptions()},
 		{"wavelet-matrix", OccWaveletMatrix, defaultOccStorageOptions()},
 		{"rlbwt", OccRLBWT, defaultOccStorageOptions()},

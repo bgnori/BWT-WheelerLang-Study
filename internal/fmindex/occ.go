@@ -61,7 +61,7 @@ const (
 	// OccStorageInMemory stores occ structures fully in memory.
 	OccStorageInMemory OccStorageMode = iota
 	// OccStorageExternal stores supported occ structures with external memory.
-	// Currently, this mode is supported for OccWaveletTree.
+	// Currently, this mode is supported for OccWaveletTree and OccBitvectors.
 	OccStorageExternal
 )
 
@@ -115,7 +115,7 @@ func normalizeOccConfig(typ OccStructure, opt OccStorageOptions) (OccStructure, 
 		typ = OccWaveletTree
 		opt.Mode = OccStorageExternal
 	}
-	if opt.Mode == OccStorageExternal && typ != OccWaveletTree {
+	if opt.Mode == OccStorageExternal && typ != OccWaveletTree && typ != OccBitvectors {
 		opt.Mode = OccStorageInMemory
 	}
 	return typ, opt
@@ -130,6 +130,11 @@ type occStructure interface {
 func buildOccWithStorage(bwt []byte, typ OccStructure, storage OccStorageOptions) occStructure {
 	typ, storage = normalizeOccConfig(typ, storage)
 	switch typ {
+	case OccBitvectors:
+		if storage.Mode == OccStorageExternal {
+			return buildExternalBitvecOcc(bwt, storage)
+		}
+		return buildBitvecOcc(bwt)
 	case OccWaveletTree:
 		if storage.Mode == OccStorageExternal {
 			cfg := wavelet.ExternalConfig{DiskBlockSize: storage.DiskBlockSize, Backend: wavelet.ExternalBackend(storage.ExternalStrategy)}

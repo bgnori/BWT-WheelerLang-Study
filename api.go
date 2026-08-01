@@ -112,7 +112,7 @@ const (
 	// OccStorageInMemory stores occ structures fully in memory.
 	OccStorageInMemory OccStorageMode = OccStorageMode(fmindex.OccStorageInMemory)
 	// OccStorageExternal stores supported occ structures with external memory.
-	// Currently, this mode is supported for OccWaveletTree.
+	// Currently, this mode is supported for OccWaveletTree and OccBitvectors.
 	OccStorageExternal OccStorageMode = OccStorageMode(fmindex.OccStorageExternal)
 )
 

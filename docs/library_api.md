@@ -47,7 +47,8 @@
 - `SuffixArrayAlgorithm`: `AlgorithmDoubling`, `AlgorithmSAIS`
 - `OccStructure`: `OccBitvectors`, `OccWaveletTree`, `OccWaveletMatrix`, `OccRLBWT`, `OccRRR`, `OccEliasFano`, `OccPoppy`, `OccDynamicBitvectors`, `OccExternalWaveletTree`（互換用）
 - `OccStorageMode`: `OccStorageInMemory`, `OccStorageExternal`
-- `OccStorageOptions`: `Mode`, `DiskBlockSize`
+- `OccExternalStrategy`: `OccExternalStrategyLSM`, `OccExternalStrategyBPlusTree`, `OccExternalStrategyInvertedSegments`
+- `OccStorageOptions`: `Mode`, `DiskBlockSize`, `ExternalStrategy`
 - `Interval`, `SearchResult`
 
 ## 最小例
@@ -94,5 +95,8 @@ func main() {
 `Save` / `WriteTo` は Occ 構造に応じて `FMIDX05`（bitvectors）、`FMIDX06`（Wavelet Tree）、
 `FMIDX07`（Wavelet Matrix）、`FMIDX08`（RLBWT）、`FMIDX09`（RRR）、`FMIDX10`（Elias-Fano）、`FMIDX11`（Poppy / Interleaved RRR）、`FMIDX12`（Dynamic Bit Vector）を出力し、
 構築時の suffix-array アルゴリズムも保存します。`FMIDX01`〜`FMIDX04` は従来どおり
-doubling として読み込まれます。`OccWaveletTree + OccStorageExternal` は `FMIDX14` を使い、
-互換のため `FMIDX13`（旧 external wavelet 形式）も読み込み対応しています。
+doubling として読み込まれます。`OccWaveletTree + OccStorageExternal` は `FMIDX15`、
+`OccBitvectors + OccStorageExternal` は `FMIDX16` を使います。外部戦略は
+`OccExternalStrategyLSM` / `OccExternalStrategyBPlusTree` /
+`OccExternalStrategyInvertedSegments` から選択できます。
+互換のため `FMIDX13`（旧 external wavelet 形式）と `FMIDX14`（strategy なし external wavelet）も読み込み対応しています。

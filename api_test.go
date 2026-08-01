@@ -298,6 +298,39 @@ func TestBuildWithOptionsWaveletExternalInvertedStrategy(t *testing.T) {
 	}
 }
 
+func TestBuildWithOptionsBitvectorsExternalStrategies(t *testing.T) {
+	text := []byte("the quick brown fox jumps over the lazy dog")
+	idxMem := BuildWithOptions(text, AlgorithmSAIS, OccBitvectors)
+	strategies := []OccExternalStrategy{
+		OccExternalStrategyLSM,
+		OccExternalStrategyBPlusTree,
+		OccExternalStrategyInvertedSegments,
+	}
+	patterns := []string{"the", "fox", "dog", "xyz"}
+
+	for _, strategy := range strategies {
+		idxExt := BuildWithConfig(text, AlgorithmSAIS, OccBitvectors, OccStorageOptions{
+			Mode:             OccStorageExternal,
+			DiskBlockSize:    4096,
+			ExternalStrategy: strategy,
+		})
+		for _, pat := range patterns {
+			p := []byte(pat)
+			if got, want := idxExt.Count(p), idxMem.Count(p); got != want {
+				t.Fatalf("strategy=%v Count(%q)=%d want=%d", strategy, pat, got, want)
+			}
+			gotPos := sortedInts(idxExt.Locate(p, 0))
+			wantPos := sortedInts(idxMem.Locate(p, 0))
+			if !intSliceEq(gotPos, wantPos) {
+				t.Fatalf("strategy=%v Locate(%q)=%v want=%v", strategy, pat, gotPos, wantPos)
+			}
+		}
+		if idxExt.OccStorage().ExternalStrategy != strategy {
+			t.Fatalf("strategy=%v not reflected in OccStorage", strategy)
+		}
+	}
+}
+
 func TestBuildWithOptionsEliasFano(t *testing.T) {
 	idx := BuildWithOptions([]byte("abracadabra"), AlgorithmDoubling, OccEliasFano)
 
