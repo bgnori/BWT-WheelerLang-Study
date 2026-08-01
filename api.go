@@ -61,42 +61,35 @@ type OccStructure int
 
 const (
 	// OccBitvectors uses one succinct bit-vector per distinct character
-	// representation. Indexes built with this option are written in the FMIDX05
-	// on-disk format.
+	// representation. On-disk magic uses FMI + occ-id(01) + persist-id.
 	OccBitvectors OccStructure = OccStructure(fmindex.OccBitvectors)
 	// OccWaveletTree uses a Wavelet Tree over the BWT, providing O(log σ)
 	// rank queries and O(n log σ) total space.  This is advantageous when
 	// the alphabet is large or nearly all 256 byte values appear.
-	// Indexes built with this option are written in the FMIDX06 on-disk
-	// format.
+	// On-disk magic uses FMI + occ-id(02) + persist-id.
 	OccWaveletTree OccStructure = OccStructure(fmindex.OccWaveletTree)
 	// OccWaveletMatrix uses a Wavelet Matrix over the BWT.  It provides the
 	// same O(log σ) rank complexity as OccWaveletTree but with a flat,
-	// cache-friendly memory layout.  Indexes built with this option use the
-	// FMIDX07 on-disk format.
+	// cache-friendly memory layout. On-disk magic uses occ-id(03).
 	OccWaveletMatrix OccStructure = OccStructure(fmindex.OccWaveletMatrix)
 	// OccRLBWT uses a run-length encoded BWT for rank queries.  The BWT is
 	// stored as a compact sequence of equal-character runs, which is the
 	// foundation of r-index style compressed indexes.  Rank queries run in
 	// O(log r) time where r is the number of BWT runs.  This is the default
 	// space-efficient for highly repetitive texts.
-	// Indexes built with this option use the FMIDX08 on-disk format.
+	// On-disk magic uses occ-id(04).
 	OccRLBWT OccStructure = OccStructure(fmindex.OccRLBWT)
 	// OccRRR uses one Raman-Raman-Rao (RRR) bit-vector per distinct character
-	// over the BWT. Indexes built with this option use the FMIDX09 on-disk
-	// format.
+	// over the BWT. On-disk magic uses occ-id(05).
 	OccRRR OccStructure = OccStructure(fmindex.OccRRR)
 	// OccEliasFano uses one Elias-Fano encoded position list per distinct
-	// character over the BWT. Indexes built with this option use the FMIDX10
-	// on-disk format.
+	// character over the BWT. On-disk magic uses occ-id(06).
 	OccEliasFano OccStructure = OccStructure(fmindex.OccEliasFano)
 	// OccPoppy uses one interleaved RRR (Poppy-style) bit-vector per distinct
-	// character over the BWT. Indexes built with this option use the FMIDX11
-	// on-disk format.
+	// character over the BWT. On-disk magic uses occ-id(07).
 	OccPoppy OccStructure = OccStructure(fmindex.OccPoppy)
 	// OccDynamicBitvectors uses one dynamic bit-vector per distinct character
-	// over the BWT. Indexes built with this option use the FMIDX12 on-disk
-	// format.
+	// over the BWT. On-disk magic uses occ-id(08).
 	OccDynamicBitvectors OccStructure = OccStructure(fmindex.OccDynamicBitvectors)
 	// OccExternalWaveletTree uses an external-memory Wavelet Tree over the BWT.
 	// Node bit-vectors are stored in temporary files while rank summaries stay

@@ -92,11 +92,8 @@ func main() {
 
 ## 永続化形式
 
-`Save` / `WriteTo` は Occ 構造に応じて `FMIDX05`（bitvectors）、`FMIDX06`（Wavelet Tree）、
-`FMIDX07`（Wavelet Matrix）、`FMIDX08`（RLBWT）、`FMIDX09`（RRR）、`FMIDX10`（Elias-Fano）、`FMIDX11`（Poppy / Interleaved RRR）、`FMIDX12`（Dynamic Bit Vector）を出力し、
-構築時の suffix-array アルゴリズムも保存します。`FMIDX01`〜`FMIDX04` は従来どおり
-doubling として読み込まれます。`OccWaveletTree + OccStorageExternal` は `FMIDX15`、
-`OccBitvectors + OccStorageExternal` は `FMIDX16` を使います。外部戦略は
-`OccExternalStrategyLSM` / `OccExternalStrategyBPlusTree` /
-`OccExternalStrategyInvertedSegments` から選択できます。
-互換のため `FMIDX13`（旧 external wavelet 形式）と `FMIDX14`（strategy なし external wavelet）も読み込み対応しています。
+`Save` / `WriteTo` は 7 バイトの Magic として `FMI` + 2 桁の Occ 構造 ID + 2 桁の永続化戦略 ID を使います。
+Occ 構造 ID は 01=bitvectors, 02=Wavelet Tree, 03=Wavelet Matrix, 04=RLBWT, 05=RRR, 06=Elias-Fano, 07=Poppy, 08=Dynamic Bit Vector です。
+永続化戦略 ID は 01=inline occ（bitvectors 専用）, 02=rebuild occ（BWT から再構築）, 03=external LSM, 04=external B+Tree, 05=external Inverted Segments です。
+たとえば `FMI0203` は Wavelet Tree + external LSM、`FMI0104` は bitvectors + external B+Tree を表します。どの external 形式でも disk block size はヘッダに保存されます。
+後方互換読み込みは提供しません。

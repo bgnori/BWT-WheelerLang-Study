@@ -455,22 +455,26 @@ func buildSuffixArray(text []byte) []int {
 
 // --- Persistence -----------------------------------------------------------
 
-const magic = "FMIDX01"    // bitvector-based occ
-const magicV2 = "FMIDX02"  // wavelet-tree-based occ (occ rebuilt from BWT on load)
-const magicV3 = "FMIDX03"  // wavelet-matrix-based occ (occ rebuilt from BWT on load)
-const magicV4 = "FMIDX04"  // RLBWT-based occ (occ rebuilt from BWT on load)
-const magicV5 = "FMIDX05"  // bitvector-based occ with construction algorithm
-const magicV6 = "FMIDX06"  // wavelet-tree-based occ with construction algorithm
-const magicV7 = "FMIDX07"  // wavelet-matrix-based occ with construction algorithm
-const magicV8 = "FMIDX08"  // RLBWT-based occ with construction algorithm
-const magicV9 = "FMIDX09"  // RRR-based occ with construction algorithm
-const magicV10 = "FMIDX10" // Elias-Fano-based occ with construction algorithm
-const magicV11 = "FMIDX11" // Poppy (interleaved RRR)-based occ with construction algorithm
-const magicV12 = "FMIDX12" // Dynamic-bitvector-based occ with construction algorithm
-const magicV13 = "FMIDX13" // Legacy external-memory wavelet-tree-based occ with construction algorithm
-const magicV14 = "FMIDX14" // Wavelet-tree occ with external-storage metadata
-const magicV15 = "FMIDX15" // Wavelet-tree occ with external strategy and storage metadata
-const magicV16 = "FMIDX16" // Bitvector occ with external strategy and storage metadata
+const (
+	magicPrefix = "FMI"
+	magicSize   = len("FMI0000")
+)
+
+const (
+	magicOccBitvectors      = 1
+	magicOccWaveletTree     = 2
+	magicOccWaveletMatrix   = 3
+	magicOccRLBWT           = 4
+	magicOccRRR             = 5
+	magicOccEliasFano       = 6
+	magicOccPoppy           = 7
+	magicOccDynamicBitvec   = 8
+	magicPersistInlineOcc   = 1
+	magicPersistRebuildOcc  = 2
+	magicPersistExternalLSM = 3
+	magicPersistExternalBPT = 4
+	magicPersistExternalInv = 5
+)
 
 // countingWriter wraps an io.Writer and tracks the total bytes written.
 type countingWriter struct {
@@ -485,17 +489,8 @@ func (cw *countingWriter) Write(p []byte) (int, error) {
 }
 
 // WriteTo serialises the index to w.
-// Bitvector-based indexes use the FMIDX05 format.
-// Wavelet-tree-based indexes use the FMIDX06 format.
-// Wavelet-matrix-based indexes use the FMIDX07 format.
-// RLBWT-based indexes use the FMIDX08 format.
-// RRR-based indexes use the FMIDX09 format.
-// Elias-Fano-based indexes use the FMIDX10 format.
-// Poppy-based indexes use the FMIDX11 format.
-// Dynamic-bitvector-based indexes use the FMIDX12 format.
-// Wavelet-tree indexes with external storage use the FMIDX15 format.
-// Bitvector indexes with external storage use the FMIDX16 format.
-// It implements io.WriterTo.
+// The 7-byte magic is composed as "FMI" + two-digit occ ID + two-digit
+// persistence ID.
 func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 	switch idx.occ.(type) {
 	case *bitvecOcc:
@@ -509,19 +504,19 @@ func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 		if idx.storage.Mode == OccStorageExternal {
 			return idx.writeToWaveletExternal(w)
 		}
-		return idx.writeToRebuildOcc(w, magicV6)
+		return idx.writeToRebuildOcc(w, OccWaveletTree)
 	case *waveletMatrixOcc:
-		return idx.writeToRebuildOcc(w, magicV7)
+		return idx.writeToRebuildOcc(w, OccWaveletMatrix)
 	case *rlbwtOcc:
-		return idx.writeToRebuildOcc(w, magicV8)
+		return idx.writeToRebuildOcc(w, OccRLBWT)
 	case *rrrOcc:
-		return idx.writeToRebuildOcc(w, magicV9)
+		return idx.writeToRebuildOcc(w, OccRRR)
 	case *eliasFanoOcc:
-		return idx.writeToRebuildOcc(w, magicV10)
+		return idx.writeToRebuildOcc(w, OccEliasFano)
 	case *poppyOcc:
-		return idx.writeToRebuildOcc(w, magicV11)
+		return idx.writeToRebuildOcc(w, OccPoppy)
 	case *dynamicBitvecOcc:
-		return idx.writeToRebuildOcc(w, magicV12)
+		return idx.writeToRebuildOcc(w, OccDynamicBitvectors)
 	case *externalWaveletOcc:
 		return idx.writeToWaveletExternal(w)
 	default:
@@ -529,19 +524,106 @@ func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 	}
 }
 
-// writeToBitvectorsExternal writes FMIDX16, which stores a Bitvector occ type
-// plus external-storage metadata (strategy and disk block size).
+func occMagicID(occType OccStructure) (int, error) {
+	switch occType {
+	case OccBitvectors:
+		return magicOccBitvectors, nil
+	case OccWaveletTree:
+		return magicOccWaveletTree, nil
+	case OccWaveletMatrix:
+		return magicOccWaveletMatrix, nil
+	case OccRLBWT:
+		return magicOccRLBWT, nil
+	case OccRRR:
+		return magicOccRRR, nil
+	case OccEliasFano:
+		return magicOccEliasFano, nil
+	case OccPoppy:
+		return magicOccPoppy, nil
+	case OccDynamicBitvectors:
+		return magicOccDynamicBitvec, nil
+	default:
+		return 0, fmt.Errorf("fmindex: unsupported occ type %d", occType)
+	}
+}
+
+func occTypeFromMagicID(occID int) (OccStructure, error) {
+	switch occID {
+	case magicOccBitvectors:
+		return OccBitvectors, nil
+	case magicOccWaveletTree:
+		return OccWaveletTree, nil
+	case magicOccWaveletMatrix:
+		return OccWaveletMatrix, nil
+	case magicOccRLBWT:
+		return OccRLBWT, nil
+	case magicOccRRR:
+		return OccRRR, nil
+	case magicOccEliasFano:
+		return OccEliasFano, nil
+	case magicOccPoppy:
+		return OccPoppy, nil
+	case magicOccDynamicBitvec:
+		return OccDynamicBitvectors, nil
+	default:
+		return 0, fmt.Errorf("fmindex: unknown occ magic id %d", occID)
+	}
+}
+
+func persistenceMagicID(occType OccStructure, storage OccStorageOptions) (int, error) {
+	if storage.Mode == OccStorageExternal {
+		if occType != OccWaveletTree && occType != OccBitvectors {
+			return 0, fmt.Errorf("fmindex: external storage is unsupported for occ type %d", occType)
+		}
+		switch storage.ExternalStrategy {
+		case OccExternalStrategyLSM:
+			return magicPersistExternalLSM, nil
+		case OccExternalStrategyBPlusTree:
+			return magicPersistExternalBPT, nil
+		case OccExternalStrategyInvertedSegments:
+			return magicPersistExternalInv, nil
+		default:
+			return 0, fmt.Errorf("fmindex: invalid external strategy %d", storage.ExternalStrategy)
+		}
+	}
+	if occType == OccBitvectors {
+		return magicPersistInlineOcc, nil
+	}
+	return magicPersistRebuildOcc, nil
+}
+
+func composeMagic(occType OccStructure, storage OccStorageOptions) (string, error) {
+	occID, err := occMagicID(occType)
+	if err != nil {
+		return "", err
+	}
+	persistID, err := persistenceMagicID(occType, storage)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s%02d%02d", magicPrefix, occID, persistID), nil
+}
+
+func parseTwoDigits(a, b byte) (int, error) {
+	if a < '0' || a > '9' || b < '0' || b > '9' {
+		return 0, fmt.Errorf("fmindex: invalid magic digits %q%q", a, b)
+	}
+	return int(a-'0')*10 + int(b-'0'), nil
+}
+
+// writeToBitvectorsExternal writes an external bitvectors format.
 func (idx *Index) writeToBitvectorsExternal(w io.Writer) (int64, error) {
 	cw := &countingWriter{w: w}
 	bw := bufio.NewWriterSize(cw, 1<<20)
 
-	if _, err := bw.WriteString(magicV16); err != nil {
+	magic, err := composeMagic(OccBitvectors, idx.storage)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := bw.WriteString(magic); err != nil {
 		return 0, err
 	}
 	if err := writeAlgorithm(bw, idx.algo); err != nil {
-		return 0, err
-	}
-	if err := binary.Write(bw, binary.LittleEndian, int32(idx.storage.ExternalStrategy)); err != nil {
 		return 0, err
 	}
 	blockSize := idx.storage.DiskBlockSize
@@ -587,19 +669,19 @@ func (idx *Index) writeToBitvectorsExternal(w io.Writer) (int64, error) {
 	return cw.n, nil
 }
 
-// writeToWaveletExternal writes FMIDX15, which stores a Wavelet-Tree occ type
-// plus external-storage metadata (strategy and disk block size).
+// writeToWaveletExternal writes an external wavelet-tree format.
 func (idx *Index) writeToWaveletExternal(w io.Writer) (int64, error) {
 	cw := &countingWriter{w: w}
 	bw := bufio.NewWriterSize(cw, 1<<20)
 
-	if _, err := bw.WriteString(magicV15); err != nil {
+	magic, err := composeMagic(OccWaveletTree, idx.storage)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := bw.WriteString(magic); err != nil {
 		return 0, err
 	}
 	if err := writeAlgorithm(bw, idx.algo); err != nil {
-		return 0, err
-	}
-	if err := binary.Write(bw, binary.LittleEndian, int32(idx.storage.ExternalStrategy)); err != nil {
 		return 0, err
 	}
 	blockSize := idx.storage.DiskBlockSize
@@ -645,12 +727,16 @@ func (idx *Index) writeToWaveletExternal(w io.Writer) (int64, error) {
 	return cw.n, nil
 }
 
-// writeToBitvectors writes the FMIDX05 (bitvector) format.
+// writeToBitvectors writes the in-memory bitvector format.
 func (idx *Index) writeToBitvectors(w io.Writer) (int64, error) {
 	cw := &countingWriter{w: w}
 	bw := bufio.NewWriterSize(cw, 1<<20)
 
-	if _, err := bw.WriteString(magicV5); err != nil {
+	magic, err := composeMagic(OccBitvectors, OccStorageOptions{Mode: OccStorageInMemory})
+	if err != nil {
+		return 0, err
+	}
+	if _, err := bw.WriteString(magic); err != nil {
 		return 0, err
 	}
 	if err := writeAlgorithm(bw, idx.algo); err != nil {
@@ -714,16 +800,17 @@ func (idx *Index) writeToBitvectors(w io.Writer) (int64, error) {
 	return cw.n, nil
 }
 
-// writeToRebuildOcc writes a format where the occurrence array is NOT stored
-// on disk and is instead reconstructed from the BWT on load.  This is used by
-// FMIDX06 (wavelet tree), FMIDX07 (wavelet matrix), FMIDX08 (RLBWT),
-// FMIDX09 (RRR), FMIDX10 (Elias-Fano), FMIDX11 (Poppy), and FMIDX12
-// (dynamic bitvectors).
-func (idx *Index) writeToRebuildOcc(w io.Writer, hdrMagic string) (int64, error) {
+// writeToRebuildOcc writes an in-memory format where occ is reconstructed
+// from BWT on load.
+func (idx *Index) writeToRebuildOcc(w io.Writer, occType OccStructure) (int64, error) {
 	cw := &countingWriter{w: w}
 	bw := bufio.NewWriterSize(cw, 1<<20)
 
-	if _, err := bw.WriteString(hdrMagic); err != nil {
+	magic, err := composeMagic(occType, OccStorageOptions{Mode: OccStorageInMemory})
+	if err != nil {
+		return 0, err
+	}
+	if _, err := bw.WriteString(magic); err != nil {
 		return 0, err
 	}
 	if err := writeAlgorithm(bw, idx.algo); err != nil {
@@ -782,59 +869,60 @@ func writeAlgorithm(w *bufio.Writer, algo SuffixArrayAlgorithm) error {
 }
 
 // ReadFrom deserialises an index from r.
-// FMIDX01 (bitvectors), FMIDX02 (wavelet tree), FMIDX03 (wavelet matrix),
-// and FMIDX04 (RLBWT) legacy formats are supported as doubling indexes.
-// FMIDX05 through FMIDX16 additionally retain the construction algorithm.
+// Supported FM-index formats use 7-byte magic values composed as
+// "FMI" + occ ID + persistence ID.
 func ReadFrom(r io.Reader) (*Index, error) {
 	br := bufio.NewReaderSize(r, 1<<20)
 
-	hdr := make([]byte, len(magic)) // all magics have the same length
+	hdr := make([]byte, magicSize)
 	if _, err := io.ReadFull(br, hdr); err != nil {
 		return nil, fmt.Errorf("fmindex: read magic: %w", err)
 	}
-	switch string(hdr) {
-	case magic:
-		return readFromBitvectors(br, AlgorithmDoubling)
-	case magicV2:
-		return readFromRebuildOcc(br, AlgorithmDoubling, OccWaveletTree)
-	case magicV3:
-		return readFromRebuildOcc(br, AlgorithmDoubling, OccWaveletMatrix)
-	case magicV4:
-		return readFromRebuildOcc(br, AlgorithmDoubling, OccRLBWT)
-	case magicV5, magicV6, magicV7, magicV8, magicV9, magicV10, magicV11, magicV12, magicV13, magicV14, magicV15, magicV16:
-		algo, err := readAlgorithm(br)
-		if err != nil {
-			return nil, err
-		}
-		switch string(hdr) {
-		case magicV5:
-			return readFromBitvectors(br, algo)
-		case magicV6:
-			return readFromRebuildOcc(br, algo, OccWaveletTree)
-		case magicV7:
-			return readFromRebuildOcc(br, algo, OccWaveletMatrix)
-		case magicV9:
-			return readFromRebuildOcc(br, algo, OccRRR)
-		case magicV10:
-			return readFromRebuildOcc(br, algo, OccEliasFano)
-		case magicV11:
-			return readFromRebuildOcc(br, algo, OccPoppy)
-		case magicV12:
-			return readFromRebuildOcc(br, algo, OccDynamicBitvectors)
-		case magicV13:
-			cfg := OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: defaultOccStorageOptions().DiskBlockSize}
-			return readFromRebuildOccWithStorage(br, algo, OccWaveletTree, cfg)
-		case magicV14:
-			return readFromWaveletExternal(br, algo)
-		case magicV15:
-			return readFromWaveletExternalV2(br, algo)
-		case magicV16:
-			return readFromBitvectorsExternal(br, algo)
-		default:
-			return readFromRebuildOcc(br, algo, OccRLBWT)
-		}
-	default:
+	if string(hdr[:len(magicPrefix)]) != magicPrefix {
 		return nil, fmt.Errorf("fmindex: bad magic %q", hdr)
+	}
+	occID, err := parseTwoDigits(hdr[3], hdr[4])
+	if err != nil {
+		return nil, err
+	}
+	persistID, err := parseTwoDigits(hdr[5], hdr[6])
+	if err != nil {
+		return nil, err
+	}
+	occType, err := occTypeFromMagicID(occID)
+	if err != nil {
+		return nil, err
+	}
+	algo, err := readAlgorithm(br)
+	if err != nil {
+		return nil, err
+	}
+
+	switch persistID {
+	case magicPersistInlineOcc:
+		if occType != OccBitvectors {
+			return nil, fmt.Errorf("fmindex: persistence id %d requires bitvectors occ", persistID)
+		}
+		return readFromBitvectors(br, algo)
+	case magicPersistRebuildOcc:
+		return readFromRebuildOcc(br, algo, occType)
+	case magicPersistExternalLSM:
+		if occType != OccWaveletTree && occType != OccBitvectors {
+			return nil, fmt.Errorf("fmindex: persistence id %d requires wavelet or bitvectors occ", persistID)
+		}
+		return readFromExternalWithFixedStrategy(br, algo, occType, OccExternalStrategyLSM)
+	case magicPersistExternalBPT:
+		if occType != OccWaveletTree && occType != OccBitvectors {
+			return nil, fmt.Errorf("fmindex: persistence id %d requires wavelet or bitvectors occ", persistID)
+		}
+		return readFromExternalWithFixedStrategy(br, algo, occType, OccExternalStrategyBPlusTree)
+	case magicPersistExternalInv:
+		if occType != OccWaveletTree && occType != OccBitvectors {
+			return nil, fmt.Errorf("fmindex: persistence id %d requires wavelet or bitvectors occ", persistID)
+		}
+		return readFromExternalWithFixedStrategy(br, algo, occType, OccExternalStrategyInvertedSegments)
+	default:
+		return nil, fmt.Errorf("fmindex: unknown persistence magic id %d", persistID)
 	}
 }
 
@@ -975,37 +1063,11 @@ func readFromRebuildOccWithStorage(br *bufio.Reader, algo SuffixArrayAlgorithm, 
 	return idx, nil
 }
 
-func readFromWaveletExternal(br *bufio.Reader, algo SuffixArrayAlgorithm) (*Index, error) {
+func readFromExternalWithFixedStrategy(br *bufio.Reader, algo SuffixArrayAlgorithm, occType OccStructure, strategy OccExternalStrategy) (*Index, error) {
 	var blockSize int32
 	if err := binary.Read(br, binary.LittleEndian, &blockSize); err != nil {
 		return nil, fmt.Errorf("fmindex: read external block size: %w", err)
 	}
-	storage := OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: int(blockSize), ExternalStrategy: OccExternalStrategyLSM}
-	return readFromRebuildOccWithStorage(br, algo, OccWaveletTree, storage)
-}
-
-func readFromWaveletExternalV2(br *bufio.Reader, algo SuffixArrayAlgorithm) (*Index, error) {
-	var strategy int32
-	if err := binary.Read(br, binary.LittleEndian, &strategy); err != nil {
-		return nil, fmt.Errorf("fmindex: read external strategy: %w", err)
-	}
-	var blockSize int32
-	if err := binary.Read(br, binary.LittleEndian, &blockSize); err != nil {
-		return nil, fmt.Errorf("fmindex: read external block size: %w", err)
-	}
-	storage := OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: int(blockSize), ExternalStrategy: OccExternalStrategy(strategy)}
-	return readFromRebuildOccWithStorage(br, algo, OccWaveletTree, storage)
-}
-
-func readFromBitvectorsExternal(br *bufio.Reader, algo SuffixArrayAlgorithm) (*Index, error) {
-	var strategy int32
-	if err := binary.Read(br, binary.LittleEndian, &strategy); err != nil {
-		return nil, fmt.Errorf("fmindex: read external strategy: %w", err)
-	}
-	var blockSize int32
-	if err := binary.Read(br, binary.LittleEndian, &blockSize); err != nil {
-		return nil, fmt.Errorf("fmindex: read external block size: %w", err)
-	}
-	storage := OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: int(blockSize), ExternalStrategy: OccExternalStrategy(strategy)}
-	return readFromRebuildOccWithStorage(br, algo, OccBitvectors, storage)
+	storage := OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: int(blockSize), ExternalStrategy: strategy}
+	return readFromRebuildOccWithStorage(br, algo, occType, storage)
 }

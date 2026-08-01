@@ -13,44 +13,43 @@ type OccStructure int
 
 const (
 	// OccBitvectors uses one succinct bit-vector per distinct character.
-	// Indexes built with this option use the FMIDX05 on-disk format.
+	// On disk, indexes use composed magic: FMI + occ-id(01) + persist-id.
 	OccBitvectors OccStructure = iota
 	// OccWaveletTree uses a Wavelet Tree over the BWT, providing O(log σ)
 	// rank queries and O(n log σ) total space.  Indexes built with this
-	// option are written in the FMIDX06 on-disk format.
+	// option are written with composed magic: FMI + occ-id(02) + persist-id.
 	OccWaveletTree
 	// OccWaveletMatrix uses a Wavelet Matrix over the BWT.  It provides the
 	// same O(log σ) rank complexity as OccWaveletTree but with a flat,
 	// cache-friendly memory layout.  Indexes built with this option use the
-	// FMIDX07 on-disk format.
+	// composed magic id occ=03.
 	OccWaveletMatrix
 	// OccRLBWT uses a run-length encoded BWT (RLBWT) for rank queries.  The
 	// BWT is stored as a compact sequence of (character, length) run pairs,
 	// the foundation of r-index style compressed indexes.  Rank queries run
 	// in O(log r) time where r is the number of BWT runs. This is the default.
-	// Indexes built
-	// with this option use the FMIDX08 on-disk format.
+	// Indexes built with this option use composed magic id occ=04.
 	OccRLBWT
 	// OccRRR uses one RRR bit-vector per distinct character over the BWT.
-	// Indexes built with this option use the FMIDX09 on-disk format.
+	// Indexes built with this option use composed magic id occ=05.
 	OccRRR
 	// OccEliasFano uses one Elias-Fano encoded position list per distinct
-	// character over the BWT. Indexes built with this option use the FMIDX10
-	// on-disk format.
+	// character over the BWT. Indexes built with this option use composed
+	// magic id occ=06.
 	OccEliasFano
 	// OccPoppy uses one interleaved RRR (Poppy-style) bit-vector per distinct
-	// character over the BWT. Indexes built with this option use the FMIDX11
-	// on-disk format.
+	// character over the BWT. Indexes built with this option use composed
+	// magic id occ=07.
 	OccPoppy
 	// OccDynamicBitvectors uses one dynamic bit-vector per distinct character
-	// over the BWT. Indexes built with this option use the FMIDX12 on-disk
-	// format.
+	// over the BWT. Indexes built with this option use composed magic id
+	// occ=08.
 	OccDynamicBitvectors
 	// OccExternalWaveletTree uses an external-memory Wavelet Tree over the BWT.
 	// Node bit-vectors are stored in temporary files with in-memory rank
 	// summaries. This constant is kept for backward compatibility.
 	// Prefer OccWaveletTree with OccStorageExternal.
-	// Indexes built with this option use the FMIDX13 on-disk format.
+	// This alias maps to the same on-disk magic as OccWaveletTree.
 	OccExternalWaveletTree
 )
 

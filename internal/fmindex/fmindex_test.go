@@ -217,6 +217,57 @@ func TestPersistencePreservesAlgorithmForAppend(t *testing.T) {
 	}
 }
 
+func TestExternalPersistenceMagicByStrategy(t *testing.T) {
+	tests := []struct {
+		name       string
+		occ        OccStructure
+		strategy   OccExternalStrategy
+		wantHeader string
+	}{
+		{"wavelet-lsm", OccWaveletTree, OccExternalStrategyLSM, "FMI0203"},
+		{"wavelet-bplustree", OccWaveletTree, OccExternalStrategyBPlusTree, "FMI0204"},
+		{"wavelet-inverted", OccWaveletTree, OccExternalStrategyInvertedSegments, "FMI0205"},
+		{"bitvectors-lsm", OccBitvectors, OccExternalStrategyLSM, "FMI0103"},
+		{"bitvectors-bplustree", OccBitvectors, OccExternalStrategyBPlusTree, "FMI0104"},
+		{"bitvectors-inverted", OccBitvectors, OccExternalStrategyInvertedSegments, "FMI0105"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := OccStorageOptions{
+				Mode:             OccStorageExternal,
+				DiskBlockSize:    8192,
+				ExternalStrategy: tt.strategy,
+			}
+			idx := BuildWithConfig([]byte("banana"), AlgorithmSAIS, tt.occ, storage)
+
+			var buf bytes.Buffer
+			if _, err := idx.WriteTo(&buf); err != nil {
+				t.Fatal("WriteTo:", err)
+			}
+
+			raw := buf.Bytes()
+			if len(raw) < len(tt.wantHeader) {
+				t.Fatalf("serialized length = %d, want >= %d", len(raw), len(tt.wantHeader))
+			}
+			if got := string(raw[:len(tt.wantHeader)]); got != tt.wantHeader {
+				t.Fatalf("magic = %q, want %q", got, tt.wantHeader)
+			}
+
+			loaded, err := ReadFrom(bytes.NewReader(raw))
+			if err != nil {
+				t.Fatal("ReadFrom:", err)
+			}
+			if loaded.storage.ExternalStrategy != tt.strategy {
+				t.Fatalf("loaded external strategy = %d, want %d", loaded.storage.ExternalStrategy, tt.strategy)
+			}
+			if loaded.typ != tt.occ {
+				t.Fatalf("loaded occ type = %d, want %d", loaded.typ, tt.occ)
+			}
+		})
+	}
+}
+
 func TestBWT(t *testing.T) {
 	// "banana$" sorted suffixes:
 	//   $ a a a b n n  → BWT = annb$aa   (classic result)

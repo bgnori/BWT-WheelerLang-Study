@@ -77,14 +77,14 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  --algo doubling|sais      FM-index with doubling or SA-IS suffix array")
 	fmt.Fprintln(os.Stderr, "  --algo suffixarray        stdlib suffix array (literal patterns only)")
 	fmt.Fprintln(os.Stderr, "  --algo bifmindex          bidirectional FM-index (--occ applies)")
-	fmt.Fprintln(os.Stderr, "  --occ bitvectors          per-character bit-vectors (FMIDX05)")
-	fmt.Fprintln(os.Stderr, "  --occ wavelet             Wavelet Tree (FMIDX06)")
-	fmt.Fprintln(os.Stderr, "  --occ waveletmatrix       Wavelet Matrix (FMIDX07)")
-	fmt.Fprintln(os.Stderr, "  --occ rlbwt               run-length BWT / r-index (default, FMIDX08)")
-	fmt.Fprintln(os.Stderr, "  --occ rrr                 RRR bit-vectors (FMIDX09)")
-	fmt.Fprintln(os.Stderr, "  --occ eliasfano           Elias-Fano position lists (FMIDX10)")
-	fmt.Fprintln(os.Stderr, "  --occ poppy               Poppy / interleaved RRR bit-vectors (FMIDX11)")
-	fmt.Fprintln(os.Stderr, "  --occ dynamic             Dynamic bit-vectors (FMIDX12)")
+	fmt.Fprintln(os.Stderr, "  --occ bitvectors          per-character bit-vectors (magic FMI0101)")
+	fmt.Fprintln(os.Stderr, "  --occ wavelet             Wavelet Tree (magic FMI0202)")
+	fmt.Fprintln(os.Stderr, "  --occ waveletmatrix       Wavelet Matrix (magic FMI0302)")
+	fmt.Fprintln(os.Stderr, "  --occ rlbwt               run-length BWT / r-index (default, magic FMI0402)")
+	fmt.Fprintln(os.Stderr, "  --occ rrr                 RRR bit-vectors (magic FMI0502)")
+	fmt.Fprintln(os.Stderr, "  --occ eliasfano           Elias-Fano position lists (magic FMI0602)")
+	fmt.Fprintln(os.Stderr, "  --occ poppy               Poppy / interleaved RRR bit-vectors (magic FMI0702)")
+	fmt.Fprintln(os.Stderr, "  --occ dynamic             Dynamic bit-vectors (magic FMI0802)")
 	fmt.Fprintln(os.Stderr, "  --storage memory          in-memory occ structures (default)")
 	fmt.Fprintln(os.Stderr, "  --storage external        external-memory occ storage (wavelet and bitvectors)")
 	fmt.Fprintln(os.Stderr, "  --external-strategy ...   lsm|bplustree|inverted for external wavelet storage")
@@ -130,9 +130,6 @@ func runBuild(args []string) error {
 		if err != nil {
 			return err
 		}
-		if isLegacyWaveletExternalOcc(*occFlag) {
-			storage.Mode = bwtsearch.OccStorageExternal
-		}
 		idx := bwtsearch.BuildBiWithConfig(text, bwtsearch.AlgorithmSAIS, occ, storage)
 		if err := idx.Save(indexPath); err != nil {
 			return err
@@ -152,9 +149,6 @@ func runBuild(args []string) error {
 	storage, err := parseStorage(*storageFlag, *externalStrategyFlag, *diskBlockSize)
 	if err != nil {
 		return err
-	}
-	if isLegacyWaveletExternalOcc(*occFlag) {
-		storage.Mode = bwtsearch.OccStorageExternal
 	}
 
 	idx := bwtsearch.BuildWithConfig(text, algo, occ, storage)
@@ -213,9 +207,6 @@ func runBuildMulti(args []string) error {
 		if err != nil {
 			return err
 		}
-		if isLegacyWaveletExternalOcc(*occFlag) {
-			storage.Mode = bwtsearch.OccStorageExternal
-		}
 		idx := bwtsearch.BuildBiFromFilesWithConfig(texts, nil, bwtsearch.AlgorithmSAIS, occ, storage)
 		if err := idx.Save(indexPath); err != nil {
 			return err
@@ -235,9 +226,6 @@ func runBuildMulti(args []string) error {
 	storage, err := parseStorage(*storageFlag, *externalStrategyFlag, *diskBlockSize)
 	if err != nil {
 		return err
-	}
-	if isLegacyWaveletExternalOcc(*occFlag) {
-		storage.Mode = bwtsearch.OccStorageExternal
 	}
 
 	idx := bwtsearch.BuildFromFilesWithConfig(texts, nil, algo, occ, storage)
@@ -649,8 +637,6 @@ func parseOcc(s string) (bwtsearch.OccStructure, error) {
 		return bwtsearch.OccPoppy, nil
 	case "dynamic", "dynamicbitvectors", "dynamic-bitvectors", "dbv":
 		return bwtsearch.OccDynamicBitvectors, nil
-	case "wavelet-external", "external-wavelet", "waveletexternal", "wte":
-		return bwtsearch.OccWaveletTree, nil
 	default:
 		return 0, fmt.Errorf("unknown occ structure %q: choose bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, poppy, or dynamic", s)
 	}
@@ -683,17 +669,8 @@ func parseStorage(mode, strategy string, blockSize int) (bwtsearch.OccStorageOpt
 	return opt, nil
 }
 
-func isLegacyWaveletExternalOcc(raw string) bool {
-	switch strings.ToLower(raw) {
-	case "wavelet-external", "external-wavelet", "waveletexternal", "wte":
-		return true
-	default:
-		return false
-	}
-}
-
 // loadAnyIndex opens path and returns the appropriate index type based on the
-// on-disk magic: FMIDX01 through FMIDX16 for FM-index variants, SAIDX01 for
+// on-disk magic: FMI<occ-id><persist-id> for FM-index variants, SAIDX01 for
 // stdlib suffix array, BIDX001 for bidirectional FM-index.
 func loadAnyIndex(path string) (anyIndex, error) {
 	f, err := os.Open(path)
