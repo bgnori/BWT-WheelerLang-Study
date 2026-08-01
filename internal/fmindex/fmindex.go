@@ -310,6 +310,12 @@ func (idx *Index) OccDiskBlockSize() int {
 	return idx.storage.DiskBlockSize
 }
 
+// OccExternalStrategy returns the external on-disk strategy used for occ
+// storage. When storage mode is in-memory, the default strategy is returned.
+func (idx *Index) OccExternalStrategy() OccExternalStrategy {
+	return idx.storage.ExternalStrategy
+}
+
 // WheelerGraphMermaid returns a Mermaid flowchart representation of the
 // Wheeler graph encoded by this FM-index.
 //
@@ -463,6 +469,7 @@ const magicV11 = "FMIDX11" // Poppy (interleaved RRR)-based occ with constructio
 const magicV12 = "FMIDX12" // Dynamic-bitvector-based occ with construction algorithm
 const magicV13 = "FMIDX13" // Legacy external-memory wavelet-tree-based occ with construction algorithm
 const magicV14 = "FMIDX14" // Wavelet-tree occ with external-storage metadata
+const magicV15 = "FMIDX15" // Wavelet-tree occ with external strategy and storage metadata
 
 // countingWriter wraps an io.Writer and tracks the total bytes written.
 type countingWriter struct {
@@ -485,7 +492,7 @@ func (cw *countingWriter) Write(p []byte) (int, error) {
 // Elias-Fano-based indexes use the FMIDX10 format.
 // Poppy-based indexes use the FMIDX11 format.
 // Dynamic-bitvector-based indexes use the FMIDX12 format.
-// Wavelet-tree indexes with external storage use the FMIDX14 format.
+// Wavelet-tree indexes with external storage use the FMIDX15 format.
 // It implements io.WriterTo.
 func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 	switch idx.occ.(type) {
@@ -513,16 +520,19 @@ func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 	}
 }
 
-// writeToWaveletExternal writes FMIDX14, which stores a Wavelet-Tree occ type
-// plus external-storage metadata (disk block size).
+// writeToWaveletExternal writes FMIDX15, which stores a Wavelet-Tree occ type
+// plus external-storage metadata (strategy and disk block size).
 func (idx *Index) writeToWaveletExternal(w io.Writer) (int64, error) {
 	cw := &countingWriter{w: w}
 	bw := bufio.NewWriterSize(cw, 1<<20)
 
-	if _, err := bw.WriteString(magicV14); err != nil {
+	if _, err := bw.WriteString(magicV15); err != nil {
 		return 0, err
 	}
 	if err := writeAlgorithm(bw, idx.algo); err != nil {
+		return 0, err
+	}
+	if err := binary.Write(bw, binary.LittleEndian, int32(idx.storage.ExternalStrategy)); err != nil {
 		return 0, err
 	}
 	blockSize := idx.storage.DiskBlockSize
@@ -707,7 +717,7 @@ func writeAlgorithm(w *bufio.Writer, algo SuffixArrayAlgorithm) error {
 // ReadFrom deserialises an index from r.
 // FMIDX01 (bitvectors), FMIDX02 (wavelet tree), FMIDX03 (wavelet matrix),
 // and FMIDX04 (RLBWT) legacy formats are supported as doubling indexes.
-// FMIDX05 through FMIDX14 additionally retain the construction algorithm.
+// FMIDX05 through FMIDX15 additionally retain the construction algorithm.
 func ReadFrom(r io.Reader) (*Index, error) {
 	br := bufio.NewReaderSize(r, 1<<20)
 
@@ -724,7 +734,7 @@ func ReadFrom(r io.Reader) (*Index, error) {
 		return readFromRebuildOcc(br, AlgorithmDoubling, OccWaveletMatrix)
 	case magicV4:
 		return readFromRebuildOcc(br, AlgorithmDoubling, OccRLBWT)
-	case magicV5, magicV6, magicV7, magicV8, magicV9, magicV10, magicV11, magicV12, magicV13, magicV14:
+	case magicV5, magicV6, magicV7, magicV8, magicV9, magicV10, magicV11, magicV12, magicV13, magicV14, magicV15:
 		algo, err := readAlgorithm(br)
 		if err != nil {
 			return nil, err
@@ -749,6 +759,8 @@ func ReadFrom(r io.Reader) (*Index, error) {
 			return readFromRebuildOccWithStorage(br, algo, OccWaveletTree, cfg)
 		case magicV14:
 			return readFromWaveletExternal(br, algo)
+		case magicV15:
+			return readFromWaveletExternalV2(br, algo)
 		default:
 			return readFromRebuildOcc(br, algo, OccRLBWT)
 		}
@@ -899,6 +911,19 @@ func readFromWaveletExternal(br *bufio.Reader, algo SuffixArrayAlgorithm) (*Inde
 	if err := binary.Read(br, binary.LittleEndian, &blockSize); err != nil {
 		return nil, fmt.Errorf("fmindex: read external block size: %w", err)
 	}
-	storage := OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: int(blockSize)}
+	storage := OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: int(blockSize), ExternalStrategy: OccExternalStrategyLSM}
+	return readFromRebuildOccWithStorage(br, algo, OccWaveletTree, storage)
+}
+
+func readFromWaveletExternalV2(br *bufio.Reader, algo SuffixArrayAlgorithm) (*Index, error) {
+	var strategy int32
+	if err := binary.Read(br, binary.LittleEndian, &strategy); err != nil {
+		return nil, fmt.Errorf("fmindex: read external strategy: %w", err)
+	}
+	var blockSize int32
+	if err := binary.Read(br, binary.LittleEndian, &blockSize); err != nil {
+		return nil, fmt.Errorf("fmindex: read external block size: %w", err)
+	}
+	storage := OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: int(blockSize), ExternalStrategy: OccExternalStrategy(strategy)}
 	return readFromRebuildOccWithStorage(br, algo, OccWaveletTree, storage)
 }

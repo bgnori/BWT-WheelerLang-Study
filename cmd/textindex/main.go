@@ -65,8 +65,8 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "textindex <command> [args]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
-	fmt.Fprintln(os.Stderr, "  build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] [--storage memory|external] [--disk-block-size BYTES] <input-file> <index-file>")
-	fmt.Fprintln(os.Stderr, "  build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] [--storage memory|external] [--disk-block-size BYTES] <index-file> <file1> [file2 ...]")
+	fmt.Fprintln(os.Stderr, "  build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] [--storage memory|external] [--external-strategy lsm|bplustree|inverted] [--disk-block-size BYTES] <input-file> <index-file>")
+	fmt.Fprintln(os.Stderr, "  build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] [--storage memory|external] [--external-strategy lsm|bplustree|inverted] [--disk-block-size BYTES] <index-file> <file1> [file2 ...]")
 	fmt.Fprintln(os.Stderr, "  info <index-file>")
 	fmt.Fprintln(os.Stderr, "  graph [flags] <index-file>")
 	fmt.Fprintln(os.Stderr, "  browse <index-file> [--show N] [--context N]")
@@ -87,6 +87,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  --occ dynamic             Dynamic bit-vectors (FMIDX12)")
 	fmt.Fprintln(os.Stderr, "  --storage memory          in-memory occ structures (default)")
 	fmt.Fprintln(os.Stderr, "  --storage external        external-memory occ storage (currently wavelet only)")
+	fmt.Fprintln(os.Stderr, "  --external-strategy ...   lsm|bplustree|inverted for external wavelet storage")
 	fmt.Fprintln(os.Stderr, "  --disk-block-size BYTES   disk block size for external storage (default 4096)")
 }
 
@@ -96,12 +97,13 @@ func runBuild(args []string) error {
 	algoFlag := fs.String("algo", "sais", "suffix-array construction algorithm: doubling, sais, suffixarray, or bifmindex")
 	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, poppy, or dynamic")
 	storageFlag := fs.String("storage", "memory", "occ storage mode: memory or external")
+	externalStrategyFlag := fs.String("external-strategy", "lsm", "external storage strategy: lsm, bplustree, or inverted")
 	diskBlockSize := fs.Int("disk-block-size", 4096, "disk block size for external occ storage")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 2 {
-		return fmt.Errorf("usage: textindex build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] [--storage memory|external] [--disk-block-size BYTES] <input-file> <index-file>")
+		return fmt.Errorf("usage: textindex build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] [--storage memory|external] [--external-strategy lsm|bplustree|inverted] [--disk-block-size BYTES] <input-file> <index-file>")
 	}
 
 	inputPath := fs.Arg(0)
@@ -124,7 +126,7 @@ func runBuild(args []string) error {
 		if err != nil {
 			return err
 		}
-		storage, err := parseStorage(*storageFlag, *diskBlockSize)
+		storage, err := parseStorage(*storageFlag, *externalStrategyFlag, *diskBlockSize)
 		if err != nil {
 			return err
 		}
@@ -147,7 +149,7 @@ func runBuild(args []string) error {
 	if err != nil {
 		return err
 	}
-	storage, err := parseStorage(*storageFlag, *diskBlockSize)
+	storage, err := parseStorage(*storageFlag, *externalStrategyFlag, *diskBlockSize)
 	if err != nil {
 		return err
 	}
@@ -175,12 +177,13 @@ func runBuildMulti(args []string) error {
 	algoFlag := fs.String("algo", "sais", "suffix-array construction algorithm: doubling, sais, suffixarray, or bifmindex")
 	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, poppy, or dynamic")
 	storageFlag := fs.String("storage", "memory", "occ storage mode: memory or external")
+	externalStrategyFlag := fs.String("external-strategy", "lsm", "external storage strategy: lsm, bplustree, or inverted")
 	diskBlockSize := fs.Int("disk-block-size", 4096, "disk block size for external occ storage")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() < 2 {
-		return fmt.Errorf("usage: textindex build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] [--storage memory|external] [--disk-block-size BYTES] <index-file> <file1> [file2 ...]")
+		return fmt.Errorf("usage: textindex build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] [--storage memory|external] [--external-strategy lsm|bplustree|inverted] [--disk-block-size BYTES] <index-file> <file1> [file2 ...]")
 	}
 
 	indexPath := fs.Arg(0)
@@ -206,7 +209,7 @@ func runBuildMulti(args []string) error {
 		if err != nil {
 			return err
 		}
-		storage, err := parseStorage(*storageFlag, *diskBlockSize)
+		storage, err := parseStorage(*storageFlag, *externalStrategyFlag, *diskBlockSize)
 		if err != nil {
 			return err
 		}
@@ -229,7 +232,7 @@ func runBuildMulti(args []string) error {
 	if err != nil {
 		return err
 	}
-	storage, err := parseStorage(*storageFlag, *diskBlockSize)
+	storage, err := parseStorage(*storageFlag, *externalStrategyFlag, *diskBlockSize)
 	if err != nil {
 		return err
 	}
@@ -310,12 +313,24 @@ func occTypeName(o bwtsearch.OccStructure) string {
 
 func occStorageName(s bwtsearch.OccStorageOptions) string {
 	if s.Mode == bwtsearch.OccStorageExternal {
+		strategy := occExternalStrategyName(s.ExternalStrategy)
 		if s.DiskBlockSize > 0 {
-			return fmt.Sprintf("external(block=%d)", s.DiskBlockSize)
+			return fmt.Sprintf("external(strategy=%s,block=%d)", strategy, s.DiskBlockSize)
 		}
-		return "external"
+		return fmt.Sprintf("external(strategy=%s)", strategy)
 	}
 	return "memory"
+}
+
+func occExternalStrategyName(s bwtsearch.OccExternalStrategy) string {
+	switch s {
+	case bwtsearch.OccExternalStrategyBPlusTree:
+		return "bplustree"
+	case bwtsearch.OccExternalStrategyInvertedSegments:
+		return "inverted"
+	default:
+		return "lsm"
+	}
 }
 
 func runGraph(args []string) error {
@@ -641,7 +656,7 @@ func parseOcc(s string) (bwtsearch.OccStructure, error) {
 	}
 }
 
-func parseStorage(mode string, blockSize int) (bwtsearch.OccStorageOptions, error) {
+func parseStorage(mode, strategy string, blockSize int) (bwtsearch.OccStorageOptions, error) {
 	opt := bwtsearch.OccStorageOptions{Mode: bwtsearch.OccStorageInMemory}
 	switch strings.ToLower(mode) {
 	case "", "memory", "in-memory", "mem":
@@ -650,6 +665,16 @@ func parseStorage(mode string, blockSize int) (bwtsearch.OccStorageOptions, erro
 		opt.Mode = bwtsearch.OccStorageExternal
 	default:
 		return bwtsearch.OccStorageOptions{}, fmt.Errorf("unknown storage mode %q: choose memory or external", mode)
+	}
+	switch strings.ToLower(strategy) {
+	case "", "lsm":
+		opt.ExternalStrategy = bwtsearch.OccExternalStrategyLSM
+	case "bplustree", "b+tree", "bplus":
+		opt.ExternalStrategy = bwtsearch.OccExternalStrategyBPlusTree
+	case "inverted", "inverted-segments", "segments", "sharded":
+		opt.ExternalStrategy = bwtsearch.OccExternalStrategyInvertedSegments
+	default:
+		return bwtsearch.OccStorageOptions{}, fmt.Errorf("unknown external strategy %q: choose lsm, bplustree, or inverted", strategy)
 	}
 	if blockSize <= 0 {
 		return bwtsearch.OccStorageOptions{}, fmt.Errorf("disk block size must be > 0")
@@ -668,7 +693,7 @@ func isLegacyWaveletExternalOcc(raw string) bool {
 }
 
 // loadAnyIndex opens path and returns the appropriate index type based on the
-// on-disk magic: FMIDX01 through FMIDX14 for FM-index variants, SAIDX01 for
+// on-disk magic: FMIDX01 through FMIDX15 for FM-index variants, SAIDX01 for
 // stdlib suffix array, BIDX001 for bidirectional FM-index.
 func loadAnyIndex(path string) (anyIndex, error) {
 	f, err := os.Open(path)

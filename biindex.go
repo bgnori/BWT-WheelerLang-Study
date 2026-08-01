@@ -75,8 +75,9 @@ func BuildBiWithOptions(text []byte, algo SuffixArrayAlgorithm, occ OccStructure
 func BuildBiWithConfig(text []byte, algo SuffixArrayAlgorithm, occ OccStructure, storage OccStorageOptions) *BiIndex {
 	rev := reverseBytes(text)
 	innerStorage := fmindex.OccStorageOptions{
-		Mode:          fmindex.OccStorageMode(storage.Mode),
-		DiskBlockSize: storage.DiskBlockSize,
+		Mode:             fmindex.OccStorageMode(storage.Mode),
+		DiskBlockSize:    storage.DiskBlockSize,
+		ExternalStrategy: fmindex.OccExternalStrategy(storage.ExternalStrategy),
 	}
 	return &BiIndex{
 		fwd: fmindex.BuildWithConfig(text, fmindex.SuffixArrayAlgorithm(algo), fmindex.OccStructure(occ), innerStorage),

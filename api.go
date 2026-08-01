@@ -116,10 +116,24 @@ const (
 	OccStorageExternal OccStorageMode = OccStorageMode(fmindex.OccStorageExternal)
 )
 
+// OccExternalStrategy selects the external on-disk backend used when
+// OccStorageOptions.Mode is OccStorageExternal.
+type OccExternalStrategy int
+
+const (
+	// OccExternalStrategyLSM uses an append-and-compact strategy.
+	OccExternalStrategyLSM OccExternalStrategy = OccExternalStrategy(fmindex.OccExternalStrategyLSM)
+	// OccExternalStrategyBPlusTree uses fixed pages with B+-tree-like lookup.
+	OccExternalStrategyBPlusTree OccExternalStrategy = OccExternalStrategy(fmindex.OccExternalStrategyBPlusTree)
+	// OccExternalStrategyInvertedSegments uses shard+segment inverted postings.
+	OccExternalStrategyInvertedSegments OccExternalStrategy = OccExternalStrategy(fmindex.OccExternalStrategyInvertedSegments)
+)
+
 // OccStorageOptions controls physical storage parameters for occ structures.
 type OccStorageOptions struct {
-	Mode          OccStorageMode
-	DiskBlockSize int
+	Mode             OccStorageMode
+	DiskBlockSize    int
+	ExternalStrategy OccExternalStrategy
 }
 
 // Interval is a half-open suffix-array range [Lo, Hi).
@@ -211,8 +225,9 @@ func BuildWithOptions(text []byte, algo SuffixArrayAlgorithm, occ OccStructure) 
 // occurrence-array options.
 func BuildWithConfig(text []byte, algo SuffixArrayAlgorithm, occ OccStructure, storage OccStorageOptions) *Index {
 	innerStorage := fmindex.OccStorageOptions{
-		Mode:          fmindex.OccStorageMode(storage.Mode),
-		DiskBlockSize: storage.DiskBlockSize,
+		Mode:             fmindex.OccStorageMode(storage.Mode),
+		DiskBlockSize:    storage.DiskBlockSize,
+		ExternalStrategy: fmindex.OccExternalStrategy(storage.ExternalStrategy),
 	}
 	return &Index{inner: fmindex.BuildWithConfig(text, fmindex.SuffixArrayAlgorithm(algo), fmindex.OccStructure(occ), innerStorage)}
 }
@@ -386,8 +401,9 @@ func (idx *Index) OccStorage() OccStorageOptions {
 		return OccStorageOptions{Mode: OccStorageInMemory}
 	}
 	return OccStorageOptions{
-		Mode:          OccStorageMode(idx.inner.OccStorageMode()),
-		DiskBlockSize: idx.inner.OccDiskBlockSize(),
+		Mode:             OccStorageMode(idx.inner.OccStorageMode()),
+		DiskBlockSize:    idx.inner.OccDiskBlockSize(),
+		ExternalStrategy: OccExternalStrategy(idx.inner.OccExternalStrategy()),
 	}
 }
 

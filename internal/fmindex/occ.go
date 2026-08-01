@@ -65,20 +65,37 @@ const (
 	OccStorageExternal
 )
 
+// OccExternalStrategy selects the external on-disk backend when Mode is
+// OccStorageExternal.
+type OccExternalStrategy int
+
+const (
+	// OccExternalStrategyLSM uses an append-and-compact strategy.
+	OccExternalStrategyLSM OccExternalStrategy = iota
+	// OccExternalStrategyBPlusTree uses fixed pages with B+-tree-like lookup.
+	OccExternalStrategyBPlusTree
+	// OccExternalStrategyInvertedSegments uses shard+segment inverted postings.
+	OccExternalStrategyInvertedSegments
+)
+
 // OccStorageOptions controls physical storage parameters for occ structures.
 type OccStorageOptions struct {
-	Mode          OccStorageMode
-	DiskBlockSize int
+	Mode             OccStorageMode
+	DiskBlockSize    int
+	ExternalStrategy OccExternalStrategy
 }
 
 func defaultOccStorageOptions() OccStorageOptions {
-	return OccStorageOptions{Mode: OccStorageInMemory, DiskBlockSize: 4096}
+	return OccStorageOptions{Mode: OccStorageInMemory, DiskBlockSize: 4096, ExternalStrategy: OccExternalStrategyLSM}
 }
 
 func normalizeOccStorageOptions(opt OccStorageOptions) OccStorageOptions {
 	def := defaultOccStorageOptions()
 	if opt.Mode != OccStorageExternal {
 		opt.Mode = OccStorageInMemory
+	}
+	if opt.ExternalStrategy < OccExternalStrategyLSM || opt.ExternalStrategy > OccExternalStrategyInvertedSegments {
+		opt.ExternalStrategy = def.ExternalStrategy
 	}
 	if opt.DiskBlockSize <= 0 {
 		opt.DiskBlockSize = def.DiskBlockSize
@@ -115,7 +132,7 @@ func buildOccWithStorage(bwt []byte, typ OccStructure, storage OccStorageOptions
 	switch typ {
 	case OccWaveletTree:
 		if storage.Mode == OccStorageExternal {
-			cfg := wavelet.ExternalConfig{DiskBlockSize: storage.DiskBlockSize}
+			cfg := wavelet.ExternalConfig{DiskBlockSize: storage.DiskBlockSize, Backend: wavelet.ExternalBackend(storage.ExternalStrategy)}
 			return &externalWaveletOcc{tree: wavelet.BuildExternalWithConfig(bwt, cfg)}
 		}
 		return &waveletOcc{tree: wavelet.Build(bwt)}

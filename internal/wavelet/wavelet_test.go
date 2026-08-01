@@ -189,3 +189,33 @@ func TestRankFullByteRange(t *testing.T) {
 		}
 	}
 }
+
+func TestExternalRankStrategiesMatchNaive(t *testing.T) {
+	seq := []byte("the quick brown fox jumps over the lazy dog")
+	strategies := []struct {
+		name    string
+		backend ExternalBackend
+	}{
+		{name: "lsm", backend: ExternalBackendLSM},
+		{name: "bplustree", backend: ExternalBackendBPlusTree},
+		{name: "inverted", backend: ExternalBackendInvertedSegments},
+	}
+
+	for _, tc := range strategies {
+		t.Run(tc.name, func(t *testing.T) {
+			tree := BuildExternalWithConfig(seq, ExternalConfig{
+				DiskBlockSize: 4096,
+				Backend:       tc.backend,
+			})
+			for _, c := range []byte{'a', 'e', 'o', 'z', ' '} {
+				for i := 0; i <= len(seq); i++ {
+					got := tree.Rank(c, i)
+					want := naiveRank(seq, c, i)
+					if got != want {
+						t.Fatalf("backend=%s Rank(%q, %d)=%d want=%d", tc.name, c, i, got, want)
+					}
+				}
+			}
+		})
+	}
+}

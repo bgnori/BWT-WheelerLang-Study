@@ -172,7 +172,9 @@ func TestPersistencePreservesAlgorithmForAppend(t *testing.T) {
 		{"elias-fano", OccEliasFano, defaultOccStorageOptions()},
 		{"poppy", OccPoppy, defaultOccStorageOptions()},
 		{"dynamic-bitvectors", OccDynamicBitvectors, defaultOccStorageOptions()},
-		{"wavelet-external", OccWaveletTree, OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: 8192}},
+		{"wavelet-external-lsm", OccWaveletTree, OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: 8192, ExternalStrategy: OccExternalStrategyLSM}},
+		{"wavelet-external-bplustree", OccWaveletTree, OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: 8192, ExternalStrategy: OccExternalStrategyBPlusTree}},
+		{"wavelet-external-inverted", OccWaveletTree, OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: 8192, ExternalStrategy: OccExternalStrategyInvertedSegments}},
 	}
 
 	for _, tt := range tests {
@@ -198,6 +200,9 @@ func TestPersistencePreservesAlgorithmForAppend(t *testing.T) {
 			}
 			if loaded.storage.Mode == OccStorageExternal && loaded.storage.DiskBlockSize != tt.stor.DiskBlockSize {
 				t.Fatalf("storage block size after persistence = %d, want %d", loaded.storage.DiskBlockSize, tt.stor.DiskBlockSize)
+			}
+			if loaded.storage.ExternalStrategy != tt.stor.ExternalStrategy {
+				t.Fatalf("external strategy after persistence = %d, want %d", loaded.storage.ExternalStrategy, tt.stor.ExternalStrategy)
 			}
 
 			loaded.Append([]byte(" bandana"))

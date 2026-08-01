@@ -250,8 +250,9 @@ func TestBuildWithOptionsWaveletExternalMatchesBitvectors(t *testing.T) {
 
 func TestBuildWithOptionsWaveletExternalPersistence(t *testing.T) {
 	idx := BuildWithConfig([]byte("abracadabra"), AlgorithmSAIS, OccWaveletTree, OccStorageOptions{
-		Mode:          OccStorageExternal,
-		DiskBlockSize: 16384,
+		Mode:             OccStorageExternal,
+		DiskBlockSize:    16384,
+		ExternalStrategy: OccExternalStrategyBPlusTree,
 	})
 
 	var buf bytes.Buffer
@@ -275,6 +276,25 @@ func TestBuildWithOptionsWaveletExternalPersistence(t *testing.T) {
 	}
 	if st.DiskBlockSize != 16384 {
 		t.Fatalf("OccStorage block size after reload = %d, want 16384", st.DiskBlockSize)
+	}
+	if st.ExternalStrategy != OccExternalStrategyBPlusTree {
+		t.Fatalf("OccStorage strategy after reload = %v, want OccExternalStrategyBPlusTree", st.ExternalStrategy)
+	}
+}
+
+func TestBuildWithOptionsWaveletExternalInvertedStrategy(t *testing.T) {
+	text := []byte("banana bandana")
+	idx := BuildWithConfig(text, AlgorithmSAIS, OccWaveletTree, OccStorageOptions{
+		Mode:             OccStorageExternal,
+		DiskBlockSize:    4096,
+		ExternalStrategy: OccExternalStrategyInvertedSegments,
+	})
+	if got := idx.Count([]byte("ana")); got != 3 {
+		t.Fatalf("Count(ana) = %d, want 3", got)
+	}
+	st := idx.OccStorage()
+	if st.ExternalStrategy != OccExternalStrategyInvertedSegments {
+		t.Fatalf("OccStorage strategy = %v, want OccExternalStrategyInvertedSegments", st.ExternalStrategy)
 	}
 }
 
