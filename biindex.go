@@ -67,10 +67,20 @@ func BuildBi(text []byte) *BiIndex {
 // BuildBiWithOptions constructs a BiIndex with explicit suffix-array
 // construction algorithm and occurrence-array structure.
 func BuildBiWithOptions(text []byte, algo SuffixArrayAlgorithm, occ OccStructure) *BiIndex {
+	return BuildBiWithConfig(text, algo, occ, OccStorageOptions{Mode: OccStorageInMemory})
+}
+
+// BuildBiWithConfig constructs a BiIndex with explicit logical and physical
+// occurrence-array options.
+func BuildBiWithConfig(text []byte, algo SuffixArrayAlgorithm, occ OccStructure, storage OccStorageOptions) *BiIndex {
 	rev := reverseBytes(text)
+	innerStorage := fmindex.OccStorageOptions{
+		Mode:          fmindex.OccStorageMode(storage.Mode),
+		DiskBlockSize: storage.DiskBlockSize,
+	}
 	return &BiIndex{
-		fwd: fmindex.BuildWithOptions(text, fmindex.SuffixArrayAlgorithm(algo), fmindex.OccStructure(occ)),
-		rev: fmindex.BuildWithOptions(rev, fmindex.SuffixArrayAlgorithm(algo), fmindex.OccStructure(occ)),
+		fwd: fmindex.BuildWithConfig(text, fmindex.SuffixArrayAlgorithm(algo), fmindex.OccStructure(occ), innerStorage),
+		rev: fmindex.BuildWithConfig(rev, fmindex.SuffixArrayAlgorithm(algo), fmindex.OccStructure(occ), innerStorage),
 	}
 }
 
@@ -88,6 +98,12 @@ func BuildBiFromFiles(texts [][]byte, separator []byte) *BiIndex {
 //
 // BuildBiFromFilesWithOptions panics if separator contains the byte 0x00.
 func BuildBiFromFilesWithOptions(texts [][]byte, separator []byte, algo SuffixArrayAlgorithm, occ OccStructure) *BiIndex {
+	return BuildBiFromFilesWithConfig(texts, separator, algo, occ, OccStorageOptions{Mode: OccStorageInMemory})
+}
+
+// BuildBiFromFilesWithConfig concatenates texts with separator and builds a
+// BiIndex using the specified logical and physical occ options.
+func BuildBiFromFilesWithConfig(texts [][]byte, separator []byte, algo SuffixArrayAlgorithm, occ OccStructure, storage OccStorageOptions) *BiIndex {
 	if separator == nil {
 		separator = []byte{'\n'}
 	}
@@ -97,7 +113,7 @@ func BuildBiFromFilesWithOptions(texts [][]byte, separator []byte, algo SuffixAr
 		}
 	}
 	if len(texts) == 0 {
-		return BuildBiWithOptions(nil, algo, occ)
+		return BuildBiWithConfig(nil, algo, occ, storage)
 	}
 	total := 0
 	for _, t := range texts {
@@ -111,7 +127,7 @@ func BuildBiFromFilesWithOptions(texts [][]byte, separator []byte, algo SuffixAr
 		}
 		combined = append(combined, t...)
 	}
-	return BuildBiWithOptions(combined, algo, occ)
+	return BuildBiWithConfig(combined, algo, occ, storage)
 }
 
 func reverseBytes(b []byte) []byte {

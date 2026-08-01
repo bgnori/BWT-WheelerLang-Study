@@ -229,7 +229,10 @@ func TestBuildWithOptionsWaveletPersistence(t *testing.T) {
 func TestBuildWithOptionsWaveletExternalMatchesBitvectors(t *testing.T) {
 	text := []byte("the quick brown fox jumps over the lazy dog")
 	idxBV := Build(text)
-	idxWTE := BuildWithOptions(text, AlgorithmSAIS, OccExternalWaveletTree)
+	idxWTE := BuildWithConfig(text, AlgorithmSAIS, OccWaveletTree, OccStorageOptions{
+		Mode:          OccStorageExternal,
+		DiskBlockSize: 8192,
+	})
 
 	patterns := []string{"the", "fox", "quick", "xyz", "dog"}
 	for _, pat := range patterns {
@@ -246,7 +249,10 @@ func TestBuildWithOptionsWaveletExternalMatchesBitvectors(t *testing.T) {
 }
 
 func TestBuildWithOptionsWaveletExternalPersistence(t *testing.T) {
-	idx := BuildWithOptions([]byte("abracadabra"), AlgorithmSAIS, OccExternalWaveletTree)
+	idx := BuildWithConfig([]byte("abracadabra"), AlgorithmSAIS, OccWaveletTree, OccStorageOptions{
+		Mode:          OccStorageExternal,
+		DiskBlockSize: 16384,
+	})
 
 	var buf bytes.Buffer
 	if _, err := idx.WriteTo(&buf); err != nil {
@@ -260,8 +266,15 @@ func TestBuildWithOptionsWaveletExternalPersistence(t *testing.T) {
 	if got := loaded.Count([]byte("abra")); got != 2 {
 		t.Fatalf("Count after reload = %d, want 2", got)
 	}
-	if got := loaded.OccType(); got != OccExternalWaveletTree {
-		t.Fatalf("OccType after reload = %v, want OccExternalWaveletTree", got)
+	if got := loaded.OccType(); got != OccWaveletTree {
+		t.Fatalf("OccType after reload = %v, want OccWaveletTree", got)
+	}
+	st := loaded.OccStorage()
+	if st.Mode != OccStorageExternal {
+		t.Fatalf("OccStorage mode after reload = %v, want OccStorageExternal", st.Mode)
+	}
+	if st.DiskBlockSize != 16384 {
+		t.Fatalf("OccStorage block size after reload = %d, want 16384", st.DiskBlockSize)
 	}
 }
 

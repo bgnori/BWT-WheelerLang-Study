@@ -49,18 +49,25 @@ FM-index 系 (`doubling` / `sais` / `bifmindex`) では Occ 構造を選択で�
 - `--occ eliasfano`
 - `--occ poppy`（Interleaved RRR）
 - `--occ dynamic`
-- `--occ wavelet-external`（外部記憶対応 Wavelet Tree）
+
+物理配置は Occ 構造と直交に選択できます:
+
+- `--storage memory`（既定）
+- `--storage external`（現状は `--occ wavelet` で有効）
+- `--disk-block-size BYTES`（`--storage external` 時のブロックサイズ、既定 4096）
 
 ## よく使うコマンド
 
 ```bash
 # インデックス作成
 textindex build [--algo doubling|sais|suffixarray|bifmindex] \
-  [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic|wavelet-external] <input-file> <index-file>
+  [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] \
+  [--storage memory|external] [--disk-block-size BYTES] <input-file> <index-file>
 
 # 複数ファイルまとめて作成
 textindex build-multi [--algo doubling|sais|suffixarray|bifmindex] \
-  [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic|wavelet-external] <index-file> <file1> [file2 ...]
+  [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] \
+  [--storage memory|external] [--disk-block-size BYTES] <index-file> <file1> [file2 ...]
 
 # 検索
 textindex search [--limit N] [--context N] [--positions] <index-file> <pattern>

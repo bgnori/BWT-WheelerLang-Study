@@ -48,9 +48,61 @@ const (
 	OccDynamicBitvectors
 	// OccExternalWaveletTree uses an external-memory Wavelet Tree over the BWT.
 	// Node bit-vectors are stored in temporary files with in-memory rank
-	// summaries. Indexes built with this option use the FMIDX13 on-disk format.
+	// summaries. This constant is kept for backward compatibility.
+	// Prefer OccWaveletTree with OccStorageExternal.
+	// Indexes built with this option use the FMIDX13 on-disk format.
 	OccExternalWaveletTree
 )
+
+// OccStorageMode selects the physical storage strategy for occ structures.
+type OccStorageMode int
+
+const (
+	// OccStorageInMemory stores occ structures fully in memory.
+	OccStorageInMemory OccStorageMode = iota
+	// OccStorageExternal stores supported occ structures with external memory.
+	// Currently, this mode is supported for OccWaveletTree.
+	OccStorageExternal
+)
+
+// OccStorageOptions controls physical storage parameters for occ structures.
+type OccStorageOptions struct {
+	Mode          OccStorageMode
+	DiskBlockSize int
+}
+
+func defaultOccStorageOptions() OccStorageOptions {
+	return OccStorageOptions{Mode: OccStorageInMemory, DiskBlockSize: 4096}
+}
+
+func normalizeOccStorageOptions(opt OccStorageOptions) OccStorageOptions {
+	def := defaultOccStorageOptions()
+	if opt.Mode != OccStorageExternal {
+		opt.Mode = OccStorageInMemory
+	}
+	if opt.DiskBlockSize <= 0 {
+		opt.DiskBlockSize = def.DiskBlockSize
+	}
+	if opt.DiskBlockSize < 8 {
+		opt.DiskBlockSize = 8
+	}
+	if rem := opt.DiskBlockSize % 8; rem != 0 {
+		opt.DiskBlockSize += 8 - rem
+	}
+	return opt
+}
+
+func normalizeOccConfig(typ OccStructure, opt OccStorageOptions) (OccStructure, OccStorageOptions) {
+	opt = normalizeOccStorageOptions(opt)
+	if typ == OccExternalWaveletTree {
+		typ = OccWaveletTree
+		opt.Mode = OccStorageExternal
+	}
+	if opt.Mode == OccStorageExternal && typ != OccWaveletTree {
+		opt.Mode = OccStorageInMemory
+	}
+	return typ, opt
+}
 
 // occStructure is the internal interface for occurrence-array implementations.
 type occStructure interface {
@@ -58,14 +110,17 @@ type occStructure interface {
 }
 
 // buildOcc constructs the appropriate occStructure for the given BWT.
-func buildOcc(bwt []byte, typ OccStructure) occStructure {
+func buildOccWithStorage(bwt []byte, typ OccStructure, storage OccStorageOptions) occStructure {
+	typ, storage = normalizeOccConfig(typ, storage)
 	switch typ {
 	case OccWaveletTree:
+		if storage.Mode == OccStorageExternal {
+			cfg := wavelet.ExternalConfig{DiskBlockSize: storage.DiskBlockSize}
+			return &externalWaveletOcc{tree: wavelet.BuildExternalWithConfig(bwt, cfg)}
+		}
 		return &waveletOcc{tree: wavelet.Build(bwt)}
 	case OccWaveletMatrix:
 		return &waveletMatrixOcc{mat: waveletmatrix.Build(bwt)}
-	case OccExternalWaveletTree:
-		return &externalWaveletOcc{tree: wavelet.BuildExternal(bwt)}
 	case OccRLBWT:
 		return &rlbwtOcc{rl: rindex.Build(bwt)}
 	case OccRRR:
@@ -79,6 +134,11 @@ func buildOcc(bwt []byte, typ OccStructure) occStructure {
 	default:
 		return buildBitvecOcc(bwt)
 	}
+}
+
+// buildOcc constructs the default in-memory occ structure for the given BWT.
+func buildOcc(bwt []byte, typ OccStructure) occStructure {
+	return buildOccWithStorage(bwt, typ, defaultOccStorageOptions())
 }
 
 // ── bitvecOcc ─────────────────────────────────────────────────────────────────

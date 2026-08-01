@@ -41,15 +41,16 @@ const sentinel = byte(0)
 
 // Index is a fully-functional FM-index (Wheeler graph) for byte strings.
 type Index struct {
-	n    int          // len(text) + 1  (includes sentinel)
-	text []byte       // original text  (without sentinel)
-	bwt  []byte       // Burrows-Wheeler Transform
-	sa   []int32      // suffix array
-	c    [256]int     // C array
-	occ  occStructure // occurrence array (bitvectors, RRR, wavelet, or RLBWT)
-	algo SuffixArrayAlgorithm
-	typ  OccStructure
-	rope *rope
+	n       int          // len(text) + 1  (includes sentinel)
+	text    []byte       // original text  (without sentinel)
+	bwt     []byte       // Burrows-Wheeler Transform
+	sa      []int32      // suffix array
+	c       [256]int     // C array
+	occ     occStructure // occurrence array (bitvectors, RRR, wavelet, or RLBWT)
+	algo    SuffixArrayAlgorithm
+	typ     OccStructure
+	storage OccStorageOptions
+	rope    *rope
 }
 
 // SuffixArrayAlgorithm selects the suffix-array construction algorithm.
@@ -82,21 +83,29 @@ func BuildWithAlgorithm(text []byte, algo SuffixArrayAlgorithm) *Index {
 // construction algorithm and an explicit occurrence-array structure.
 // The text must not contain the null byte (0x00); it is reserved as sentinel.
 func BuildWithOptions(text []byte, algo SuffixArrayAlgorithm, occType OccStructure) *Index {
-	n, bwt, sa32, c, occ := buildState(text, algo, occType)
+	return BuildWithConfig(text, algo, occType, defaultOccStorageOptions())
+}
+
+// BuildWithConfig constructs an FM-index with explicit logical and physical
+// options for the occurrence array.
+func BuildWithConfig(text []byte, algo SuffixArrayAlgorithm, occType OccStructure, storage OccStorageOptions) *Index {
+	occType, storage = normalizeOccConfig(occType, storage)
+	n, bwt, sa32, c, occ := buildState(text, algo, occType, storage)
 	return &Index{
-		n:    n,
-		text: append([]byte(nil), text...),
-		bwt:  bwt,
-		sa:   sa32,
-		c:    c,
-		occ:  occ,
-		algo: algo,
-		typ:  occType,
-		rope: newRopeFromBytes(text),
+		n:       n,
+		text:    append([]byte(nil), text...),
+		bwt:     bwt,
+		sa:      sa32,
+		c:       c,
+		occ:     occ,
+		algo:    algo,
+		typ:     occType,
+		storage: storage,
+		rope:    newRopeFromBytes(text),
 	}
 }
 
-func buildState(text []byte, algo SuffixArrayAlgorithm, occType OccStructure) (int, []byte, []int32, [256]int, occStructure) {
+func buildState(text []byte, algo SuffixArrayAlgorithm, occType OccStructure, storage OccStorageOptions) (int, []byte, []int32, [256]int, occStructure) {
 	// --- 1. Append sentinel -------------------------------------------------
 	n := len(text) + 1
 	t := make([]byte, n)
@@ -135,7 +144,7 @@ func buildState(text []byte, algo SuffixArrayAlgorithm, occType OccStructure) (i
 	}
 
 	// --- 5. Occurrence array ------------------------------------------------
-	occ := buildOcc(bwt, occType)
+	occ := buildOccWithStorage(bwt, occType, storage)
 
 	// Convert SA to int32 to halve memory on 64-bit systems
 	sa32 := make([]int32, n)
@@ -289,6 +298,18 @@ func (idx *Index) NumBWTRuns() int {
 // OccType returns the occurrence-array structure selected for this index.
 func (idx *Index) OccType() OccStructure { return idx.typ }
 
+// OccStorageMode returns the physical storage mode used by the occurrence array.
+func (idx *Index) OccStorageMode() OccStorageMode { return idx.storage.Mode }
+
+// OccDiskBlockSize returns the disk block size used for external occ storage.
+// Returns 0 when the storage mode is in-memory.
+func (idx *Index) OccDiskBlockSize() int {
+	if idx.storage.Mode != OccStorageExternal {
+		return 0
+	}
+	return idx.storage.DiskBlockSize
+}
+
 // WheelerGraphMermaid returns a Mermaid flowchart representation of the
 // Wheeler graph encoded by this FM-index.
 //
@@ -440,7 +461,8 @@ const magicV9 = "FMIDX09"  // RRR-based occ with construction algorithm
 const magicV10 = "FMIDX10" // Elias-Fano-based occ with construction algorithm
 const magicV11 = "FMIDX11" // Poppy (interleaved RRR)-based occ with construction algorithm
 const magicV12 = "FMIDX12" // Dynamic-bitvector-based occ with construction algorithm
-const magicV13 = "FMIDX13" // External-memory wavelet-tree-based occ with construction algorithm
+const magicV13 = "FMIDX13" // Legacy external-memory wavelet-tree-based occ with construction algorithm
+const magicV14 = "FMIDX14" // Wavelet-tree occ with external-storage metadata
 
 // countingWriter wraps an io.Writer and tracks the total bytes written.
 type countingWriter struct {
@@ -463,11 +485,14 @@ func (cw *countingWriter) Write(p []byte) (int, error) {
 // Elias-Fano-based indexes use the FMIDX10 format.
 // Poppy-based indexes use the FMIDX11 format.
 // Dynamic-bitvector-based indexes use the FMIDX12 format.
-// External-memory wavelet-tree-based indexes use the FMIDX13 format.
+// Wavelet-tree indexes with external storage use the FMIDX14 format.
 // It implements io.WriterTo.
 func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 	switch idx.occ.(type) {
 	case *waveletOcc:
+		if idx.storage.Mode == OccStorageExternal {
+			return idx.writeToWaveletExternal(w)
+		}
 		return idx.writeToRebuildOcc(w, magicV6)
 	case *waveletMatrixOcc:
 		return idx.writeToRebuildOcc(w, magicV7)
@@ -482,10 +507,65 @@ func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 	case *dynamicBitvecOcc:
 		return idx.writeToRebuildOcc(w, magicV12)
 	case *externalWaveletOcc:
-		return idx.writeToRebuildOcc(w, magicV13)
+		return idx.writeToWaveletExternal(w)
 	default:
 		return idx.writeToBitvectors(w)
 	}
+}
+
+// writeToWaveletExternal writes FMIDX14, which stores a Wavelet-Tree occ type
+// plus external-storage metadata (disk block size).
+func (idx *Index) writeToWaveletExternal(w io.Writer) (int64, error) {
+	cw := &countingWriter{w: w}
+	bw := bufio.NewWriterSize(cw, 1<<20)
+
+	if _, err := bw.WriteString(magicV14); err != nil {
+		return 0, err
+	}
+	if err := writeAlgorithm(bw, idx.algo); err != nil {
+		return 0, err
+	}
+	blockSize := idx.storage.DiskBlockSize
+	if blockSize <= 0 {
+		blockSize = defaultOccStorageOptions().DiskBlockSize
+	}
+	if err := binary.Write(bw, binary.LittleEndian, int32(blockSize)); err != nil {
+		return 0, err
+	}
+	if err := binary.Write(bw, binary.LittleEndian, int64(idx.n)); err != nil {
+		return 0, err
+	}
+
+	if err := binary.Write(bw, binary.LittleEndian, int64(len(idx.text))); err != nil {
+		return 0, err
+	}
+	if _, err := bw.Write(idx.text); err != nil {
+		return 0, err
+	}
+	if _, err := bw.Write(idx.bwt); err != nil {
+		return 0, err
+	}
+
+	saBuf := make([]byte, len(idx.sa)*4)
+	for i, v := range idx.sa {
+		binary.LittleEndian.PutUint32(saBuf[i*4:], uint32(v))
+	}
+	if _, err := bw.Write(saBuf); err != nil {
+		return 0, err
+	}
+
+	cBuf := make([]byte, 256*8)
+	for i, v := range idx.c {
+		binary.LittleEndian.PutUint64(cBuf[i*8:], uint64(v))
+	}
+	if _, err := bw.Write(cBuf); err != nil {
+		return 0, err
+	}
+
+	if err := bw.Flush(); err != nil {
+		return cw.n, err
+	}
+	return cw.n, nil
 }
 
 // writeToBitvectors writes the FMIDX05 (bitvector) format.
@@ -561,7 +641,7 @@ func (idx *Index) writeToBitvectors(w io.Writer) (int64, error) {
 // on disk and is instead reconstructed from the BWT on load.  This is used by
 // FMIDX06 (wavelet tree), FMIDX07 (wavelet matrix), FMIDX08 (RLBWT),
 // FMIDX09 (RRR), FMIDX10 (Elias-Fano), FMIDX11 (Poppy), and FMIDX12
-// (dynamic bitvectors), and FMIDX13 (external-memory wavelet tree).
+// (dynamic bitvectors).
 func (idx *Index) writeToRebuildOcc(w io.Writer, hdrMagic string) (int64, error) {
 	cw := &countingWriter{w: w}
 	bw := bufio.NewWriterSize(cw, 1<<20)
@@ -627,7 +707,7 @@ func writeAlgorithm(w *bufio.Writer, algo SuffixArrayAlgorithm) error {
 // ReadFrom deserialises an index from r.
 // FMIDX01 (bitvectors), FMIDX02 (wavelet tree), FMIDX03 (wavelet matrix),
 // and FMIDX04 (RLBWT) legacy formats are supported as doubling indexes.
-// FMIDX05 through FMIDX13 additionally retain the construction algorithm.
+// FMIDX05 through FMIDX14 additionally retain the construction algorithm.
 func ReadFrom(r io.Reader) (*Index, error) {
 	br := bufio.NewReaderSize(r, 1<<20)
 
@@ -644,7 +724,7 @@ func ReadFrom(r io.Reader) (*Index, error) {
 		return readFromRebuildOcc(br, AlgorithmDoubling, OccWaveletMatrix)
 	case magicV4:
 		return readFromRebuildOcc(br, AlgorithmDoubling, OccRLBWT)
-	case magicV5, magicV6, magicV7, magicV8, magicV9, magicV10, magicV11, magicV12, magicV13:
+	case magicV5, magicV6, magicV7, magicV8, magicV9, magicV10, magicV11, magicV12, magicV13, magicV14:
 		algo, err := readAlgorithm(br)
 		if err != nil {
 			return nil, err
@@ -665,7 +745,10 @@ func ReadFrom(r io.Reader) (*Index, error) {
 		case magicV12:
 			return readFromRebuildOcc(br, algo, OccDynamicBitvectors)
 		case magicV13:
-			return readFromRebuildOcc(br, algo, OccExternalWaveletTree)
+			cfg := OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: defaultOccStorageOptions().DiskBlockSize}
+			return readFromRebuildOccWithStorage(br, algo, OccWaveletTree, cfg)
+		case magicV14:
+			return readFromWaveletExternal(br, algo)
 		default:
 			return readFromRebuildOcc(br, algo, OccRLBWT)
 		}
@@ -699,7 +782,7 @@ func (idx *Index) Append(text []byte) {
 	}
 	idx.rope = idx.rope.Append(text)
 	combined := idx.rope.Bytes()
-	n, bwt, sa32, c, occ := buildState(combined, idx.algo, idx.typ)
+	n, bwt, sa32, c, occ := buildState(combined, idx.algo, idx.typ, idx.storage)
 	idx.n = n
 	idx.text = combined
 	idx.bwt = bwt
@@ -783,6 +866,7 @@ func readFromBitvectors(br *bufio.Reader, algo SuffixArrayAlgorithm) (*Index, er
 	idx.occ = occ
 	idx.algo = algo
 	idx.typ = OccBitvectors
+	idx.storage = defaultOccStorageOptions()
 	idx.rope = newRopeFromBytes(idx.text)
 	return idx, nil
 }
@@ -790,13 +874,31 @@ func readFromBitvectors(br *bufio.Reader, algo SuffixArrayAlgorithm) (*Index, er
 // readFromRebuildOcc reads a format whose magic and algorithm are already consumed.
 // The occurrence array is reconstructed from the stored BWT using occType.
 func readFromRebuildOcc(br *bufio.Reader, algo SuffixArrayAlgorithm, occType OccStructure) (*Index, error) {
+	return readFromRebuildOccWithStorage(br, algo, occType, defaultOccStorageOptions())
+}
+
+// readFromRebuildOccWithStorage reads a format whose magic and algorithm are
+// already consumed. The occurrence array is reconstructed from the stored BWT
+// using logical and physical occ options.
+func readFromRebuildOccWithStorage(br *bufio.Reader, algo SuffixArrayAlgorithm, occType OccStructure, storage OccStorageOptions) (*Index, error) {
 	idx, err := readCommonHeader(br)
 	if err != nil {
 		return nil, err
 	}
-	idx.occ = buildOcc(idx.bwt, occType)
+	occType, storage = normalizeOccConfig(occType, storage)
+	idx.occ = buildOccWithStorage(idx.bwt, occType, storage)
 	idx.algo = algo
 	idx.typ = occType
+	idx.storage = storage
 	idx.rope = newRopeFromBytes(idx.text)
 	return idx, nil
+}
+
+func readFromWaveletExternal(br *bufio.Reader, algo SuffixArrayAlgorithm) (*Index, error) {
+	var blockSize int32
+	if err := binary.Read(br, binary.LittleEndian, &blockSize); err != nil {
+		return nil, fmt.Errorf("fmindex: read external block size: %w", err)
+	}
+	storage := OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: int(blockSize)}
+	return readFromRebuildOccWithStorage(br, algo, OccWaveletTree, storage)
 }

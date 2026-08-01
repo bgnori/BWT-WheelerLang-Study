@@ -11,11 +11,12 @@
 ### FM-index
 
 - `Build`, `BuildWithAlgorithm`, `BuildWithOptions`
-- `BuildFromFiles`, `BuildFromFilesWithOptions`
+- `BuildWithConfig`
+- `BuildFromFiles`, `BuildFromFilesWithOptions`, `BuildFromFilesWithConfig`
 - `Load`, `ReadFrom`
 - `(*Index).Save`, `(*Index).WriteTo`
 - `(*Index).Append`, `(*Index).Count`, `(*Index).Locate`, `(*Index).ContextAround`
-- `(*Index).SALen`, `(*Index).AlphabetSize`, `(*Index).OccType`, `(*Index).NumBWTRuns`
+- `(*Index).SALen`, `(*Index).AlphabetSize`, `(*Index).OccType`, `(*Index).OccStorage`, `(*Index).NumBWTRuns`
 - `Search`, `Check`
 
 `Build` / `BuildFromFiles` の既定値は `AlgorithmSAIS + OccRLBWT` です。
@@ -30,7 +31,8 @@
 ### 双方向 FM-index
 
 - `BuildBi`, `BuildBiWithOptions`
-- `BuildBiFromFiles`, `BuildBiFromFilesWithOptions`
+- `BuildBiWithConfig`
+- `BuildBiFromFiles`, `BuildBiFromFilesWithOptions`, `BuildBiFromFilesWithConfig`
 - `LoadBi`, `ReadBiFrom`
 - `(*BiIndex).Save`, `(*BiIndex).WriteTo`
 - `(*BiIndex).Count`, `(*BiIndex).Locate`, `(*BiIndex).ContextAround`
@@ -43,7 +45,9 @@
 - `ViolationError`（星なし制約違反）
 - `UnsupportedError`（未対応正規表現構文）
 - `SuffixArrayAlgorithm`: `AlgorithmDoubling`, `AlgorithmSAIS`
-- `OccStructure`: `OccBitvectors`, `OccWaveletTree`, `OccWaveletMatrix`, `OccRLBWT`, `OccRRR`, `OccEliasFano`, `OccPoppy`, `OccDynamicBitvectors`, `OccExternalWaveletTree`
+- `OccStructure`: `OccBitvectors`, `OccWaveletTree`, `OccWaveletMatrix`, `OccRLBWT`, `OccRRR`, `OccEliasFano`, `OccPoppy`, `OccDynamicBitvectors`, `OccExternalWaveletTree`（互換用）
+- `OccStorageMode`: `OccStorageInMemory`, `OccStorageExternal`
+- `OccStorageOptions`: `Mode`, `DiskBlockSize`
 - `Interval`, `SearchResult`
 
 ## 最小例
@@ -88,6 +92,7 @@ func main() {
 ## 永続化形式
 
 `Save` / `WriteTo` は Occ 構造に応じて `FMIDX05`（bitvectors）、`FMIDX06`（Wavelet Tree）、
-`FMIDX07`（Wavelet Matrix）、`FMIDX08`（RLBWT）、`FMIDX09`（RRR）、`FMIDX10`（Elias-Fano）、`FMIDX11`（Poppy / Interleaved RRR）、`FMIDX12`（Dynamic Bit Vector）、`FMIDX13`（外部記憶対応 Wavelet Tree）を出力し、
+`FMIDX07`（Wavelet Matrix）、`FMIDX08`（RLBWT）、`FMIDX09`（RRR）、`FMIDX10`（Elias-Fano）、`FMIDX11`（Poppy / Interleaved RRR）、`FMIDX12`（Dynamic Bit Vector）を出力し、
 構築時の suffix-array アルゴリズムも保存します。`FMIDX01`〜`FMIDX04` は従来どおり
-doubling として読み込まれます。
+doubling として読み込まれます。`OccWaveletTree + OccStorageExternal` は `FMIDX14` を使い、
+互換のため `FMIDX13`（旧 external wavelet 形式）も読み込み対応しています。

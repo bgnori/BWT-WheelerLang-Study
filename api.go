@@ -100,9 +100,27 @@ const (
 	OccDynamicBitvectors OccStructure = OccStructure(fmindex.OccDynamicBitvectors)
 	// OccExternalWaveletTree uses an external-memory Wavelet Tree over the BWT.
 	// Node bit-vectors are stored in temporary files while rank summaries stay
-	// in memory. Indexes built with this option use the FMIDX13 on-disk format.
+	// in memory. This constant is kept for backward compatibility.
+	// Prefer OccWaveletTree with OccStorageExternal.
 	OccExternalWaveletTree OccStructure = OccStructure(fmindex.OccExternalWaveletTree)
 )
+
+// OccStorageMode selects the physical storage strategy for occ structures.
+type OccStorageMode int
+
+const (
+	// OccStorageInMemory stores occ structures fully in memory.
+	OccStorageInMemory OccStorageMode = OccStorageMode(fmindex.OccStorageInMemory)
+	// OccStorageExternal stores supported occ structures with external memory.
+	// Currently, this mode is supported for OccWaveletTree.
+	OccStorageExternal OccStorageMode = OccStorageMode(fmindex.OccStorageExternal)
+)
+
+// OccStorageOptions controls physical storage parameters for occ structures.
+type OccStorageOptions struct {
+	Mode          OccStorageMode
+	DiskBlockSize int
+}
 
 // Interval is a half-open suffix-array range [Lo, Hi).
 type Interval struct {
@@ -189,6 +207,16 @@ func BuildWithOptions(text []byte, algo SuffixArrayAlgorithm, occ OccStructure) 
 	return &Index{inner: fmindex.BuildWithOptions(text, fmindex.SuffixArrayAlgorithm(algo), fmindex.OccStructure(occ))}
 }
 
+// BuildWithConfig constructs an index with explicit logical and physical
+// occurrence-array options.
+func BuildWithConfig(text []byte, algo SuffixArrayAlgorithm, occ OccStructure, storage OccStorageOptions) *Index {
+	innerStorage := fmindex.OccStorageOptions{
+		Mode:          fmindex.OccStorageMode(storage.Mode),
+		DiskBlockSize: storage.DiskBlockSize,
+	}
+	return &Index{inner: fmindex.BuildWithConfig(text, fmindex.SuffixArrayAlgorithm(algo), fmindex.OccStructure(occ), innerStorage)}
+}
+
 // BuildFromFilesWithOptions concatenates texts with separator and builds a
 // single FM-index using the specified algorithm and occurrence-array structure.
 // If separator is nil a newline (\n) is used. The separator must not contain
@@ -220,6 +248,37 @@ func BuildFromFilesWithOptions(texts [][]byte, separator []byte, algo SuffixArra
 		combined = append(combined, t...)
 	}
 	return BuildWithOptions(combined, algo, occ)
+}
+
+// BuildFromFilesWithConfig concatenates texts with separator and builds a
+// single FM-index using the specified logical and physical occ options.
+// If separator is nil a newline (\n) is used. The separator must not contain
+// 0x00, which is reserved as the FM-index sentinel.
+func BuildFromFilesWithConfig(texts [][]byte, separator []byte, algo SuffixArrayAlgorithm, occ OccStructure, storage OccStorageOptions) *Index {
+	if separator == nil {
+		separator = []byte{'\n'}
+	}
+	for _, b := range separator {
+		if b == 0x00 {
+			panic("bwtsearch: separator must not contain 0x00 (reserved as sentinel)")
+		}
+	}
+	if len(texts) == 0 {
+		return BuildWithConfig(nil, algo, occ, storage)
+	}
+	total := 0
+	for _, t := range texts {
+		total += len(t)
+	}
+	total += len(separator) * (len(texts) - 1)
+	combined := make([]byte, 0, total)
+	for i, t := range texts {
+		if i > 0 {
+			combined = append(combined, separator...)
+		}
+		combined = append(combined, t...)
+	}
+	return BuildWithConfig(combined, algo, occ, storage)
 }
 
 // ReadFrom deserialises an index from r.
@@ -318,6 +377,18 @@ func (idx *Index) OccType() OccStructure {
 		return OccBitvectors
 	}
 	return OccStructure(idx.inner.OccType())
+}
+
+// OccStorage returns the physical storage options used by this index.
+// A nil *Index returns in-memory defaults.
+func (idx *Index) OccStorage() OccStorageOptions {
+	if idx == nil || idx.inner == nil {
+		return OccStorageOptions{Mode: OccStorageInMemory}
+	}
+	return OccStorageOptions{
+		Mode:          OccStorageMode(idx.inner.OccStorageMode()),
+		DiskBlockSize: idx.inner.OccDiskBlockSize(),
+	}
 }
 
 // BWT returns a copy of the Burrows-Wheeler Transform.

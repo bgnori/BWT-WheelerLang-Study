@@ -162,21 +162,22 @@ func TestPersistencePreservesAlgorithmForAppend(t *testing.T) {
 	tests := []struct {
 		name string
 		occ  OccStructure
+		stor OccStorageOptions
 	}{
-		{"bitvectors", OccBitvectors},
-		{"wavelet", OccWaveletTree},
-		{"wavelet-matrix", OccWaveletMatrix},
-		{"rlbwt", OccRLBWT},
-		{"rrr", OccRRR},
-		{"elias-fano", OccEliasFano},
-		{"poppy", OccPoppy},
-		{"dynamic-bitvectors", OccDynamicBitvectors},
-		{"wavelet-external", OccExternalWaveletTree},
+		{"bitvectors", OccBitvectors, defaultOccStorageOptions()},
+		{"wavelet", OccWaveletTree, defaultOccStorageOptions()},
+		{"wavelet-matrix", OccWaveletMatrix, defaultOccStorageOptions()},
+		{"rlbwt", OccRLBWT, defaultOccStorageOptions()},
+		{"rrr", OccRRR, defaultOccStorageOptions()},
+		{"elias-fano", OccEliasFano, defaultOccStorageOptions()},
+		{"poppy", OccPoppy, defaultOccStorageOptions()},
+		{"dynamic-bitvectors", OccDynamicBitvectors, defaultOccStorageOptions()},
+		{"wavelet-external", OccWaveletTree, OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: 8192}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			idx := BuildWithOptions([]byte("banana"), AlgorithmSAIS, tt.occ)
+			idx := BuildWithConfig([]byte("banana"), AlgorithmSAIS, tt.occ, tt.stor)
 			var buf bytes.Buffer
 			if _, err := idx.WriteTo(&buf); err != nil {
 				t.Fatal("WriteTo:", err)
@@ -192,9 +193,15 @@ func TestPersistencePreservesAlgorithmForAppend(t *testing.T) {
 			if loaded.typ != tt.occ {
 				t.Fatalf("occ type after persistence = %d, want %d", loaded.typ, tt.occ)
 			}
+			if loaded.storage.Mode != tt.stor.Mode {
+				t.Fatalf("storage mode after persistence = %d, want %d", loaded.storage.Mode, tt.stor.Mode)
+			}
+			if loaded.storage.Mode == OccStorageExternal && loaded.storage.DiskBlockSize != tt.stor.DiskBlockSize {
+				t.Fatalf("storage block size after persistence = %d, want %d", loaded.storage.DiskBlockSize, tt.stor.DiskBlockSize)
+			}
 
 			loaded.Append([]byte(" bandana"))
-			want := BuildWithOptions([]byte("banana bandana"), AlgorithmSAIS, tt.occ)
+			want := BuildWithConfig([]byte("banana bandana"), AlgorithmSAIS, tt.occ, tt.stor)
 			if !intSliceEqual(sortedPositions(loaded.Locate([]byte("ana"), 0)), sortedPositions(want.Locate([]byte("ana"), 0))) {
 				t.Fatal("Append result differs from an SA-IS rebuild")
 			}
@@ -902,9 +909,12 @@ func TestNumBWTRunsAndOccType(t *testing.T) {
 	if got := idxDyn.OccType(); got != OccDynamicBitvectors {
 		t.Errorf("OccType = %v, want OccDynamicBitvectors", got)
 	}
-	idxWTE := BuildWithOptions(text, AlgorithmDoubling, OccExternalWaveletTree)
-	if got := idxWTE.OccType(); got != OccExternalWaveletTree {
-		t.Errorf("OccType = %v, want OccExternalWaveletTree", got)
+	idxWTE := BuildWithConfig(text, AlgorithmDoubling, OccWaveletTree, OccStorageOptions{Mode: OccStorageExternal, DiskBlockSize: 4096})
+	if got := idxWTE.OccType(); got != OccWaveletTree {
+		t.Errorf("OccType = %v, want OccWaveletTree", got)
+	}
+	if got := idxWTE.OccStorageMode(); got != OccStorageExternal {
+		t.Errorf("OccStorageMode = %v, want OccStorageExternal", got)
 	}
 	// NumBWTRuns: alternating text should have more runs than repetitive.
 	idxAlt := BuildWithOptions([]byte("ababababab"), AlgorithmDoubling, OccRLBWT)

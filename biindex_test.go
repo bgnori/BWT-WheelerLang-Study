@@ -58,7 +58,10 @@ func TestBuildWithOptionsWaveletMatrixPersistence(t *testing.T) {
 }
 
 func TestBuildWithOptionsWaveletExternalPersistenceAPI(t *testing.T) {
-	idx := BuildWithOptions([]byte("abracadabra"), AlgorithmSAIS, OccExternalWaveletTree)
+	idx := BuildWithConfig([]byte("abracadabra"), AlgorithmSAIS, OccWaveletTree, OccStorageOptions{
+		Mode:          OccStorageExternal,
+		DiskBlockSize: 4096,
+	})
 
 	var buf bytes.Buffer
 	if _, err := idx.WriteTo(&buf); err != nil {
@@ -71,8 +74,12 @@ func TestBuildWithOptionsWaveletExternalPersistenceAPI(t *testing.T) {
 	if got := loaded.Count([]byte("abra")); got != 2 {
 		t.Fatalf("Count after reload = %d, want 2", got)
 	}
-	if got := loaded.OccType(); got != OccExternalWaveletTree {
-		t.Fatalf("OccType after reload = %v, want OccExternalWaveletTree", got)
+	if got := loaded.OccType(); got != OccWaveletTree {
+		t.Fatalf("OccType after reload = %v, want OccWaveletTree", got)
+	}
+	st := loaded.OccStorage()
+	if st.Mode != OccStorageExternal {
+		t.Fatalf("OccStorage mode after reload = %v, want OccStorageExternal", st.Mode)
 	}
 }
 

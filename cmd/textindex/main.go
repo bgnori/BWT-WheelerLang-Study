@@ -65,8 +65,8 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "textindex <command> [args]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
-	fmt.Fprintln(os.Stderr, "  build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic|wavelet-external] <input-file> <index-file>")
-	fmt.Fprintln(os.Stderr, "  build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic|wavelet-external] <index-file> <file1> [file2 ...]")
+	fmt.Fprintln(os.Stderr, "  build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] [--storage memory|external] [--disk-block-size BYTES] <input-file> <index-file>")
+	fmt.Fprintln(os.Stderr, "  build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] [--storage memory|external] [--disk-block-size BYTES] <index-file> <file1> [file2 ...]")
 	fmt.Fprintln(os.Stderr, "  info <index-file>")
 	fmt.Fprintln(os.Stderr, "  graph [flags] <index-file>")
 	fmt.Fprintln(os.Stderr, "  browse <index-file> [--show N] [--context N]")
@@ -85,19 +85,23 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  --occ eliasfano           Elias-Fano position lists (FMIDX10)")
 	fmt.Fprintln(os.Stderr, "  --occ poppy               Poppy / interleaved RRR bit-vectors (FMIDX11)")
 	fmt.Fprintln(os.Stderr, "  --occ dynamic             Dynamic bit-vectors (FMIDX12)")
-	fmt.Fprintln(os.Stderr, "  --occ wavelet-external    external-memory Wavelet Tree (FMIDX13)")
+	fmt.Fprintln(os.Stderr, "  --storage memory          in-memory occ structures (default)")
+	fmt.Fprintln(os.Stderr, "  --storage external        external-memory occ storage (currently wavelet only)")
+	fmt.Fprintln(os.Stderr, "  --disk-block-size BYTES   disk block size for external storage (default 4096)")
 }
 
 func runBuild(args []string) error {
 	fs := flag.NewFlagSet("build", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	algoFlag := fs.String("algo", "sais", "suffix-array construction algorithm: doubling, sais, suffixarray, or bifmindex")
-	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, poppy, dynamic, or wavelet-external")
+	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, poppy, or dynamic")
+	storageFlag := fs.String("storage", "memory", "occ storage mode: memory or external")
+	diskBlockSize := fs.Int("disk-block-size", 4096, "disk block size for external occ storage")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 2 {
-		return fmt.Errorf("usage: textindex build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic|wavelet-external] <input-file> <index-file>")
+		return fmt.Errorf("usage: textindex build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] [--storage memory|external] [--disk-block-size BYTES] <input-file> <index-file>")
 	}
 
 	inputPath := fs.Arg(0)
@@ -120,7 +124,14 @@ func runBuild(args []string) error {
 		if err != nil {
 			return err
 		}
-		idx := bwtsearch.BuildBiWithOptions(text, bwtsearch.AlgorithmSAIS, occ)
+		storage, err := parseStorage(*storageFlag, *diskBlockSize)
+		if err != nil {
+			return err
+		}
+		if isLegacyWaveletExternalOcc(*occFlag) {
+			storage.Mode = bwtsearch.OccStorageExternal
+		}
+		idx := bwtsearch.BuildBiWithConfig(text, bwtsearch.AlgorithmSAIS, occ, storage)
 		if err := idx.Save(indexPath); err != nil {
 			return err
 		}
@@ -136,8 +147,15 @@ func runBuild(args []string) error {
 	if err != nil {
 		return err
 	}
+	storage, err := parseStorage(*storageFlag, *diskBlockSize)
+	if err != nil {
+		return err
+	}
+	if isLegacyWaveletExternalOcc(*occFlag) {
+		storage.Mode = bwtsearch.OccStorageExternal
+	}
 
-	idx := bwtsearch.BuildWithOptions(text, algo, occ)
+	idx := bwtsearch.BuildWithConfig(text, algo, occ, storage)
 	out, err := os.Create(indexPath)
 	if err != nil {
 		return fmt.Errorf("create index: %w", err)
@@ -155,12 +173,14 @@ func runBuildMulti(args []string) error {
 	fs := flag.NewFlagSet("build-multi", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	algoFlag := fs.String("algo", "sais", "suffix-array construction algorithm: doubling, sais, suffixarray, or bifmindex")
-	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, poppy, dynamic, or wavelet-external")
+	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, poppy, or dynamic")
+	storageFlag := fs.String("storage", "memory", "occ storage mode: memory or external")
+	diskBlockSize := fs.Int("disk-block-size", 4096, "disk block size for external occ storage")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() < 2 {
-		return fmt.Errorf("usage: textindex build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic|wavelet-external] <index-file> <file1> [file2 ...]")
+		return fmt.Errorf("usage: textindex build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] [--storage memory|external] [--disk-block-size BYTES] <index-file> <file1> [file2 ...]")
 	}
 
 	indexPath := fs.Arg(0)
@@ -186,7 +206,14 @@ func runBuildMulti(args []string) error {
 		if err != nil {
 			return err
 		}
-		idx := bwtsearch.BuildBiFromFilesWithOptions(texts, nil, bwtsearch.AlgorithmSAIS, occ)
+		storage, err := parseStorage(*storageFlag, *diskBlockSize)
+		if err != nil {
+			return err
+		}
+		if isLegacyWaveletExternalOcc(*occFlag) {
+			storage.Mode = bwtsearch.OccStorageExternal
+		}
+		idx := bwtsearch.BuildBiFromFilesWithConfig(texts, nil, bwtsearch.AlgorithmSAIS, occ, storage)
 		if err := idx.Save(indexPath); err != nil {
 			return err
 		}
@@ -202,8 +229,15 @@ func runBuildMulti(args []string) error {
 	if err != nil {
 		return err
 	}
+	storage, err := parseStorage(*storageFlag, *diskBlockSize)
+	if err != nil {
+		return err
+	}
+	if isLegacyWaveletExternalOcc(*occFlag) {
+		storage.Mode = bwtsearch.OccStorageExternal
+	}
 
-	idx := bwtsearch.BuildFromFilesWithOptions(texts, nil, algo, occ)
+	idx := bwtsearch.BuildFromFilesWithConfig(texts, nil, algo, occ, storage)
 	out, err := os.Create(indexPath)
 	if err != nil {
 		return fmt.Errorf("create index: %w", err)
@@ -240,6 +274,8 @@ func runInfo(args []string) error {
 		fmt.Printf("sa length: %d\n", fi.SALen())
 		fmt.Printf("alphabet size: %d\n", fi.AlphabetSize())
 		fmt.Printf("occ structure: %s\n", occName)
+		storage := fi.OccStorage()
+		fmt.Printf("occ storage: %s\n", occStorageName(storage))
 		fmt.Printf("bwt runs: %d\n", fi.NumBWTRuns())
 	case *bwtsearch.StdlibIndex:
 		fmt.Printf("backend: stdlib suffixarray\n")
@@ -267,11 +303,19 @@ func occTypeName(o bwtsearch.OccStructure) string {
 		return "poppy"
 	case bwtsearch.OccDynamicBitvectors:
 		return "dynamic-bitvectors"
-	case bwtsearch.OccExternalWaveletTree:
-		return "wavelet-external"
 	default:
 		return "bitvectors"
 	}
+}
+
+func occStorageName(s bwtsearch.OccStorageOptions) string {
+	if s.Mode == bwtsearch.OccStorageExternal {
+		if s.DiskBlockSize > 0 {
+			return fmt.Sprintf("external(block=%d)", s.DiskBlockSize)
+		}
+		return "external"
+	}
+	return "memory"
 }
 
 func runGraph(args []string) error {
@@ -591,14 +635,40 @@ func parseOcc(s string) (bwtsearch.OccStructure, error) {
 	case "dynamic", "dynamicbitvectors", "dynamic-bitvectors", "dbv":
 		return bwtsearch.OccDynamicBitvectors, nil
 	case "wavelet-external", "external-wavelet", "waveletexternal", "wte":
-		return bwtsearch.OccExternalWaveletTree, nil
+		return bwtsearch.OccWaveletTree, nil
 	default:
-		return 0, fmt.Errorf("unknown occ structure %q: choose bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, poppy, dynamic, or wavelet-external", s)
+		return 0, fmt.Errorf("unknown occ structure %q: choose bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, poppy, or dynamic", s)
+	}
+}
+
+func parseStorage(mode string, blockSize int) (bwtsearch.OccStorageOptions, error) {
+	opt := bwtsearch.OccStorageOptions{Mode: bwtsearch.OccStorageInMemory}
+	switch strings.ToLower(mode) {
+	case "", "memory", "in-memory", "mem":
+		opt.Mode = bwtsearch.OccStorageInMemory
+	case "external", "disk", "ext":
+		opt.Mode = bwtsearch.OccStorageExternal
+	default:
+		return bwtsearch.OccStorageOptions{}, fmt.Errorf("unknown storage mode %q: choose memory or external", mode)
+	}
+	if blockSize <= 0 {
+		return bwtsearch.OccStorageOptions{}, fmt.Errorf("disk block size must be > 0")
+	}
+	opt.DiskBlockSize = blockSize
+	return opt, nil
+}
+
+func isLegacyWaveletExternalOcc(raw string) bool {
+	switch strings.ToLower(raw) {
+	case "wavelet-external", "external-wavelet", "waveletexternal", "wte":
+		return true
+	default:
+		return false
 	}
 }
 
 // loadAnyIndex opens path and returns the appropriate index type based on the
-// on-disk magic: FMIDX01 through FMIDX13 for FM-index variants, SAIDX01 for
+// on-disk magic: FMIDX01 through FMIDX14 for FM-index variants, SAIDX01 for
 // stdlib suffix array, BIDX001 for bidirectional FM-index.
 func loadAnyIndex(path string) (anyIndex, error) {
 	f, err := os.Open(path)
