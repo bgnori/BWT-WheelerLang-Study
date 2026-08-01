@@ -3,7 +3,7 @@
 ## 共通
 
 ```bash
-bwtsearch <command> [args]
+textindex <command> [args]
 ```
 
 サポートコマンド:
@@ -21,7 +21,7 @@ bwtsearch <command> [args]
 ## `build` — 単一ファイルからインデックス構築
 
 ```bash
-bwtsearch build [--algo doubling|sais|suffixarray|bifmindex] \
+textindex build [--algo doubling|sais|suffixarray|bifmindex] \
   [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <input-file> <index-file>
 ```
 
@@ -39,10 +39,10 @@ bwtsearch build [--algo doubling|sais|suffixarray|bifmindex] \
 例:
 
 ```bash
-bwtsearch build data/moby_dick.txt data/moby_dick.idx
-bwtsearch build --algo sais --occ waveletmatrix data/moby_dick.txt data/moby_dick.idx
-bwtsearch build --algo suffixarray data/moby_dick.txt data/moby_dick.saidx
-bwtsearch build --algo bifmindex --occ rlbwt data/moby_dick.txt data/moby_dick.bidx
+textindex build data/moby_dick.txt data/moby_dick.idx
+textindex build --algo sais --occ waveletmatrix data/moby_dick.txt data/moby_dick.idx
+textindex build --algo suffixarray data/moby_dick.txt data/moby_dick.saidx
+textindex build --algo bifmindex --occ rlbwt data/moby_dick.txt data/moby_dick.bidx
 ```
 
 ---
@@ -50,7 +50,7 @@ bwtsearch build --algo bifmindex --occ rlbwt data/moby_dick.txt data/moby_dick.b
 ## `build-multi` — 複数ファイルからインデックス構築
 
 ```bash
-bwtsearch build-multi [--algo doubling|sais|suffixarray|bifmindex] \
+textindex build-multi [--algo doubling|sais|suffixarray|bifmindex] \
   [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <index-file> <file1> [file2 ...]
 ```
 
@@ -60,7 +60,7 @@ bwtsearch build-multi [--algo doubling|sais|suffixarray|bifmindex] \
 
 ```bash
 find data/git-src -type f \( -name "*.c" -o -name "*.h" \) | sort | \
-  xargs bwtsearch build-multi --algo sais data/git.idx
+  xargs textindex build-multi --algo sais data/git.idx
 ```
 
 ---
@@ -68,7 +68,7 @@ find data/git-src -type f \( -name "*.c" -o -name "*.h" \) | sort | \
 ## `info` — インデックス情報表示
 
 ```bash
-bwtsearch info <index-file>
+textindex info <index-file>
 ```
 
 主な表示内容:
@@ -82,7 +82,7 @@ bwtsearch info <index-file>
 ## `graph` — Wheeler グラフ出力（Mermaid）
 
 ```bash
-bwtsearch graph [--max-nodes N] [--markdown=true|false] <index-file>
+textindex graph [--max-nodes N] [--markdown=true|false] <index-file>
 ```
 
 - `--max-nodes`: 描画ノード数上限（`0` で全件）
@@ -95,7 +95,7 @@ bwtsearch graph [--max-nodes N] [--markdown=true|false] <index-file>
 ## `browse` — 対話ブラウズ
 
 ```bash
-bwtsearch browse <index-file> [--show N] [--context N]
+textindex browse <index-file> [--show N] [--context N]
 ```
 
 - 端末 TTY ではインタラクティブ UI
@@ -106,7 +106,7 @@ bwtsearch browse <index-file> [--show N] [--context N]
 ## `search` — 検索
 
 ```bash
-bwtsearch search [--limit N] [--context N] [--positions] <index-file> <pattern>
+textindex search [--limit N] [--context N] [--positions] <index-file> <pattern>
 ```
 
 - `--limit`（既定: `20`）: 最大件数（`0` 以下で無制限）
@@ -130,7 +130,7 @@ FM-index で拒否される代表例:
 ## `web` — 検索 Web UI
 
 ```bash
-bwtsearch web [--index FILE] [--addr ADDR] [--limit N] [--context N] [--min-chars N]
+textindex web [--index FILE] [--addr ADDR] [--limit N] [--context N] [--min-chars N]
 ```
 
 - `--index`（既定: `data/moby_dick.idx`）

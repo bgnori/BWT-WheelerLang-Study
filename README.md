@@ -9,8 +9,8 @@
 ```bash
 docker compose build
 docker compose run download
-docker compose run bwtsearch build /data/moby_dick.txt /data/moby_dick.idx
-docker compose run bwtsearch search /data/moby_dick.idx "white whale"
+docker compose run textindex build /data/moby_dick.txt /data/moby_dick.idx
+docker compose run textindex search /data/moby_dick.idx "white whale"
 ```
 
 ### ローカル Go ですぐ試す
@@ -50,18 +50,18 @@ FM-index 系 (`doubling` / `sais` / `bifmindex`) では Occ 構造を選択で�
 
 ```bash
 # インデックス作成
-bwtsearch build [--algo doubling|sais|suffixarray|bifmindex] \
+textindex build [--algo doubling|sais|suffixarray|bifmindex] \
   [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <input-file> <index-file>
 
 # 複数ファイルまとめて作成
-bwtsearch build-multi [--algo doubling|sais|suffixarray|bifmindex] \
+textindex build-multi [--algo doubling|sais|suffixarray|bifmindex] \
   [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <index-file> <file1> [file2 ...]
 
 # 検索
-bwtsearch search [--limit N] [--context N] [--positions] <index-file> <pattern>
+textindex search [--limit N] [--context N] [--positions] <index-file> <pattern>
 
 # Web UI
-bwtsearch web [--index FILE] [--addr ADDR] [--limit N] [--context N] [--min-chars N]
+textindex web [--index FILE] [--addr ADDR] [--limit N] [--context N] [--min-chars N]
 ```
 
 > `search` のパターン解釈はバックエンド依存です。

@@ -55,7 +55,7 @@
 | **BWT取得** | `idx.BWT() []byte` | `fmi.BWT` フィールド直接アクセス | Wavelet Tree経由（直接アクセス不可） |
 | **永続化（保存/読み込み）** | **`idx.Save(path)` / `Load(path)`** バイナリ形式 | なし | なし |
 | **Wheeler グラフ視覚化** | **`WheelerGraphMermaid(maxNodes int)` + CLIコマンド** | なし | なし |
-| **インタラクティブUI** | **`bwtsearch browse`** — TUI | なし | なし |
+| **インタラクティブUI** | **`textindex browse`** — TUI | なし | なし |
 
 ---
 

@@ -1,6 +1,6 @@
 # Wheeler Graph Mermaid Examples
 
-このファイルは、`bwtsearch graph` が出力する Wheeler graph の Mermaid 例です。
+このファイルは、`textindex graph` が出力する Wheeler graph の Mermaid 例です。
 
 ## 例1: `banana` 全ノード表示
 
@@ -14,8 +14,8 @@ banana
 
 ```bash
 printf 'banana' > /tmp/wheeler_sample.txt
-./bwtsearch build /tmp/wheeler_sample.txt /tmp/wheeler_sample.idx
-./bwtsearch graph --max-nodes 0 /tmp/wheeler_sample.idx
+./textindex build /tmp/wheeler_sample.txt /tmp/wheeler_sample.idx
+./textindex graph --max-nodes 0 /tmp/wheeler_sample.idx
 ```
 
 出力例:
@@ -44,7 +44,7 @@ flowchart LR
 生成コマンド:
 
 ```bash
-./bwtsearch graph --max-nodes 4 /tmp/wheeler_sample.idx
+./textindex graph --max-nodes 4 /tmp/wheeler_sample.idx
 ```
 
 出力例:

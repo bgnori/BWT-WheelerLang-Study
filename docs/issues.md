@@ -207,10 +207,10 @@ git push origin v0.1.0
 
 **問題:**  
 `go.mod` の direct 依存に `github.com/charmbracelet/bubbletea`、`github.com/charmbracelet/bubbles` が含まれる。  
-これらは `cmd/bwtsearch` のみが使用するが、ライブラリとして `go get` した利用者の `go mod tidy` 出力に余分な依存が現れる可能性があります。
+これらは `cmd/textindex` のみが使用するが、ライブラリとして `go get` した利用者の `go mod tidy` 出力に余分な依存が現れる可能性があります。
 
 **対処案（将来的な検討）:**  
-`cmd/bwtsearch` を独立したモジュール（`cmd/bwtsearch/go.mod`）に切り出す、  
+`cmd/textindex` を独立したモジュール（`cmd/textindex/go.mod`）に切り出す、  
 または `go.work` ワークスペースを使う構成に移行する。  
 現状のメリット（単一リポジトリでの開発のしやすさ）と天秤にかけて判断すること。
 

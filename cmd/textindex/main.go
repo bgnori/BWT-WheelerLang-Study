@@ -62,7 +62,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "bwtsearch <command> [args]")
+	fmt.Fprintln(os.Stderr, "textindex <command> [args]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <input-file> <index-file>")
@@ -92,7 +92,7 @@ func runBuild(args []string) error {
 		return err
 	}
 	if fs.NArg() != 2 {
-		return fmt.Errorf("usage: bwtsearch build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <input-file> <index-file>")
+		return fmt.Errorf("usage: textindex build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <input-file> <index-file>")
 	}
 
 	inputPath := fs.Arg(0)
@@ -155,7 +155,7 @@ func runBuildMulti(args []string) error {
 		return err
 	}
 	if fs.NArg() < 2 {
-		return fmt.Errorf("usage: bwtsearch build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <index-file> <file1> [file2 ...]")
+		return fmt.Errorf("usage: textindex build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <index-file> <file1> [file2 ...]")
 	}
 
 	indexPath := fs.Arg(0)
@@ -219,7 +219,7 @@ func runInfo(args []string) error {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: bwtsearch info <index-file>")
+		return fmt.Errorf("usage: textindex info <index-file>")
 	}
 
 	idx, err := loadAnyIndex(fs.Arg(0))
@@ -268,7 +268,7 @@ func runGraph(args []string) error {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: bwtsearch graph [flags] <index-file>")
+		return fmt.Errorf("usage: textindex graph [flags] <index-file>")
 	}
 
 	anyIdx, err := loadAnyIndex(fs.Arg(0))
@@ -301,7 +301,7 @@ func runBrowse(args []string) error {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: bwtsearch browse <index-file> [--show N] [--context N]")
+		return fmt.Errorf("usage: textindex browse <index-file> [--show N] [--context N]")
 	}
 
 	idx, err := loadAnyIndex(fs.Arg(0))
@@ -492,7 +492,7 @@ func runSearch(args []string) error {
 		return err
 	}
 	if fs.NArg() != 2 {
-		return fmt.Errorf("usage: bwtsearch search [flags] <index-file> <pattern>")
+		return fmt.Errorf("usage: textindex search [flags] <index-file> <pattern>")
 	}
 
 	idx, err := loadAnyIndex(fs.Arg(0))

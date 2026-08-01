@@ -158,7 +158,7 @@
 
 ## 4) メモリ消費とインデックスサイズ（CLI 実測）
 
-`bwtsearch` CLI で FM/SAIS と stdlib SuffixArray を比較。  
+`textindex` CLI で FM/SAIS と stdlib SuffixArray を比較。  
 ピークRSSは `ps` サンプリングによる近似値（kB）です。
 
 ### 構築時メトリクス

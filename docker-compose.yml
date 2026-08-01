@@ -1,14 +1,14 @@
 version: "3.8"
 
 services:
-  bwtsearch:
+  textindex:
     build: .
     volumes:
       # Mount local ./data into the container so index files persist.
       - ./data:/data
     working_dir: /data
     # Override the default entrypoint arguments when running interactively:
-    #   docker compose run bwtsearch search moby.idx "whale"
+    #   docker compose run textindex search moby.idx "whale"
     stdin_open: true
     tty: true
 

@@ -124,11 +124,11 @@ UTF-8 エンコードを意識した実装が必要になり、追加の設計�
 ### TUI 依存関係 (`charmbracelet`) のライブラリ影響
 
 `go.mod` に `charmbracelet/bubbletea`, `charmbracelet/bubbles` が direct 依存として
-記載されているが、これらは `cmd/bwtsearch/main.go` のみで使用する。
+記載されているが、これらは `cmd/textindex/main.go` のみで使用する。
 Go モジュールシステムはパッケージ単位で依存関係を解決するため、
 ライブラリパッケージのみを import するユーザーにはこれらの依存は伝播しない。
 現状では実害がないが、将来的に `go.mod` の依存を最小化したい場合は
-`cmd/bwtsearch` を別モジュールに切り出す方法がある。
+`cmd/textindex` を別モジュールに切り出す方法がある。
 
 ---
 

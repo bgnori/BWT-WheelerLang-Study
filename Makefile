@@ -1,7 +1,7 @@
 .PHONY: all build test lint clean download-moby-dick download-testdata download-kenshin download-git download-ecoli prepare-ecoli download-osativa download-osativa-chr1 prepare-osativa-chr1 prepare-osativa-all download-amazon-small prepare-amazon-small download-amazon-medium prepare-amazon-medium download-amazon-large prepare-amazon-large build-index-moby-dick build-index build-search-demo search-demo suffixarray-demo-moby-dick suffixarray-demo generate-fake-logs generate-fake-log-apache-common generate-fake-log-apache-error generate-fake-log-syslog generate-fake-log-json generate-fake-log-logfmt docker-build docker-run build-index-osativa-all-suffixarray suffixarray-demo-osativa-all time-build-index-osativa-all-sais time-build-index-osativa-all-suffixarray time-search-osativa-all-fm time-search-osativa-all-suffixarray bench-osativa-all
 .PHONY: time-build-index-moby-dick-sais time-search-moby-dick-fm bench-moby-dick time-build-index-kenshin-sais time-search-kenshin-fm bench-kenshin time-build-index-git-sais time-search-git-fm bench-git time-build-index-ecoli-sais time-search-ecoli-fm bench-ecoli time-build-index-osativa-chr1-sais time-search-osativa-chr1-fm bench-osativa-chr1 time-build-index-amazon-small-sais time-search-amazon-small-fm bench-amazon-small time-build-index-amazon-medium-sais time-search-amazon-medium-fm bench-amazon-medium time-build-index-amazon-large-sais time-search-amazon-large-fm bench-amazon-large time-build-index-fake-log-apache-common-sais time-search-fake-log-apache-common-fm bench-fake-log-apache-common time-build-index-fake-log-apache-error-sais time-search-fake-log-apache-error-fm bench-fake-log-apache-error time-build-index-fake-log-syslog-sais time-search-fake-log-syslog-fm bench-fake-log-syslog time-build-index-fake-log-json-sais time-search-fake-log-json-fm bench-fake-log-json time-build-index-fake-log-logfmt-sais time-search-fake-log-logfmt-fm bench-fake-log-logfmt bench-fake-logs bench-all-datasets bench-all-datasets-local bench-all-datasets-external
 
-BINARY  := bwtsearch
+BINARY  := textindex
 DATADIR := data
 INDEXFILE := $(DATADIR)/moby_dick.idx
 KENSHIN_INDEXFILE := $(DATADIR)/kenshin.idx
@@ -33,9 +33,9 @@ FAKE_LOG_SIZE ?= 1M
 
 all: build
 
-## build: compile the bwtsearch binary
+## build: compile the textindex binary
 build:
-	go build -o $(BINARY) ./cmd/bwtsearch
+	go build -o $(BINARY) ./cmd/textindex
 
 ## test: run all unit tests
 test:
@@ -106,9 +106,9 @@ suffixarray-demo-kenshin: $(DATADIR)/kenshin.txt
 docker-build:
 	docker compose build
 
-## docker-run: run an interactive bwtsearch container
+## docker-run: run an interactive textindex container
 docker-run:
-	docker compose run bwtsearch
+	docker compose run textindex
 
 ## download-git: download Git source code (.c/.h files) into data/git-src/
 download-git:
