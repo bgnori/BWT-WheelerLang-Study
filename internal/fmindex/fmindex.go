@@ -46,7 +46,7 @@ type Index struct {
 	bwt  []byte       // Burrows-Wheeler Transform
 	sa   []int32      // suffix array
 	c    [256]int     // C array
-	occ  occStructure // occurrence array (bitvectors or wavelet tree)
+	occ  occStructure // occurrence array (bitvectors, RRR, wavelet, or RLBWT)
 	algo SuffixArrayAlgorithm
 	typ  OccStructure
 	rope *rope
@@ -436,6 +436,7 @@ const magicV5 = "FMIDX05" // bitvector-based occ with construction algorithm
 const magicV6 = "FMIDX06" // wavelet-tree-based occ with construction algorithm
 const magicV7 = "FMIDX07" // wavelet-matrix-based occ with construction algorithm
 const magicV8 = "FMIDX08" // RLBWT-based occ with construction algorithm
+const magicV9 = "FMIDX09" // RRR-based occ with construction algorithm
 
 // countingWriter wraps an io.Writer and tracks the total bytes written.
 type countingWriter struct {
@@ -454,6 +455,7 @@ func (cw *countingWriter) Write(p []byte) (int, error) {
 // Wavelet-tree-based indexes use the FMIDX06 format.
 // Wavelet-matrix-based indexes use the FMIDX07 format.
 // RLBWT-based indexes use the FMIDX08 format.
+// RRR-based indexes use the FMIDX09 format.
 // It implements io.WriterTo.
 func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 	switch idx.occ.(type) {
@@ -463,6 +465,8 @@ func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 		return idx.writeToRebuildOcc(w, magicV7)
 	case *rlbwtOcc:
 		return idx.writeToRebuildOcc(w, magicV8)
+	case *rrrOcc:
+		return idx.writeToRebuildOcc(w, magicV9)
 	default:
 		return idx.writeToBitvectors(w)
 	}
@@ -605,7 +609,7 @@ func writeAlgorithm(w *bufio.Writer, algo SuffixArrayAlgorithm) error {
 // ReadFrom deserialises an index from r.
 // FMIDX01 (bitvectors), FMIDX02 (wavelet tree), FMIDX03 (wavelet matrix),
 // and FMIDX04 (RLBWT) legacy formats are supported as doubling indexes.
-// FMIDX05 through FMIDX08 additionally retain the construction algorithm.
+// FMIDX05 through FMIDX09 additionally retain the construction algorithm.
 func ReadFrom(r io.Reader) (*Index, error) {
 	br := bufio.NewReaderSize(r, 1<<20)
 
@@ -622,7 +626,7 @@ func ReadFrom(r io.Reader) (*Index, error) {
 		return readFromRebuildOcc(br, AlgorithmDoubling, OccWaveletMatrix)
 	case magicV4:
 		return readFromRebuildOcc(br, AlgorithmDoubling, OccRLBWT)
-	case magicV5, magicV6, magicV7, magicV8:
+	case magicV5, magicV6, magicV7, magicV8, magicV9:
 		algo, err := readAlgorithm(br)
 		if err != nil {
 			return nil, err
@@ -634,6 +638,8 @@ func ReadFrom(r io.Reader) (*Index, error) {
 			return readFromRebuildOcc(br, algo, OccWaveletTree)
 		case magicV7:
 			return readFromRebuildOcc(br, algo, OccWaveletMatrix)
+		case magicV9:
+			return readFromRebuildOcc(br, algo, OccRRR)
 		default:
 			return readFromRebuildOcc(br, algo, OccRLBWT)
 		}

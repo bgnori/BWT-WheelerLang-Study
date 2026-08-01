@@ -65,8 +65,8 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "textindex <command> [args]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
-	fmt.Fprintln(os.Stderr, "  build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <input-file> <index-file>")
-	fmt.Fprintln(os.Stderr, "  build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <index-file> <file1> [file2 ...]")
+	fmt.Fprintln(os.Stderr, "  build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr] <input-file> <index-file>")
+	fmt.Fprintln(os.Stderr, "  build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr] <index-file> <file1> [file2 ...]")
 	fmt.Fprintln(os.Stderr, "  info <index-file>")
 	fmt.Fprintln(os.Stderr, "  graph [flags] <index-file>")
 	fmt.Fprintln(os.Stderr, "  browse <index-file> [--show N] [--context N]")
@@ -81,18 +81,19 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  --occ wavelet             Wavelet Tree (FMIDX06)")
 	fmt.Fprintln(os.Stderr, "  --occ waveletmatrix       Wavelet Matrix (FMIDX07)")
 	fmt.Fprintln(os.Stderr, "  --occ rlbwt               run-length BWT / r-index (default, FMIDX08)")
+	fmt.Fprintln(os.Stderr, "  --occ rrr                 RRR bit-vectors (FMIDX09)")
 }
 
 func runBuild(args []string) error {
 	fs := flag.NewFlagSet("build", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	algoFlag := fs.String("algo", "sais", "suffix-array construction algorithm: doubling, sais, suffixarray, or bifmindex")
-	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, or rlbwt")
+	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, rlbwt, or rrr")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 2 {
-		return fmt.Errorf("usage: textindex build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <input-file> <index-file>")
+		return fmt.Errorf("usage: textindex build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr] <input-file> <index-file>")
 	}
 
 	inputPath := fs.Arg(0)
@@ -150,12 +151,12 @@ func runBuildMulti(args []string) error {
 	fs := flag.NewFlagSet("build-multi", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	algoFlag := fs.String("algo", "sais", "suffix-array construction algorithm: doubling, sais, suffixarray, or bifmindex")
-	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, or rlbwt")
+	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, rlbwt, or rrr")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() < 2 {
-		return fmt.Errorf("usage: textindex build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt] <index-file> <file1> [file2 ...]")
+		return fmt.Errorf("usage: textindex build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr] <index-file> <file1> [file2 ...]")
 	}
 
 	indexPath := fs.Arg(0)
@@ -254,6 +255,8 @@ func occTypeName(o bwtsearch.OccStructure) string {
 		return "wavelet-matrix"
 	case bwtsearch.OccRLBWT:
 		return "rlbwt"
+	case bwtsearch.OccRRR:
+		return "rrr"
 	default:
 		return "bitvectors"
 	}
@@ -567,8 +570,10 @@ func parseOcc(s string) (bwtsearch.OccStructure, error) {
 		return bwtsearch.OccWaveletMatrix, nil
 	case "rlbwt", "rindex", "r-index", "":
 		return bwtsearch.OccRLBWT, nil
+	case "rrr", "rrrvector", "rrr-vector":
+		return bwtsearch.OccRRR, nil
 	default:
-		return 0, fmt.Errorf("unknown occ structure %q: choose bitvectors, wavelet, waveletmatrix, or rlbwt", s)
+		return 0, fmt.Errorf("unknown occ structure %q: choose bitvectors, wavelet, waveletmatrix, rlbwt, or rrr", s)
 	}
 }
 

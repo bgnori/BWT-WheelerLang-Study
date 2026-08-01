@@ -167,6 +167,7 @@ func TestPersistencePreservesAlgorithmForAppend(t *testing.T) {
 		{"wavelet", OccWaveletTree},
 		{"wavelet-matrix", OccWaveletMatrix},
 		{"rlbwt", OccRLBWT},
+		{"rrr", OccRRR},
 	}
 
 	for _, tt := range tests {
@@ -627,6 +628,67 @@ func TestRLBWTPersistence(t *testing.T) {
 	}
 }
 
+// --- RRR tests -------------------------------------------------------------
+
+func TestRRRMatchesBitvectors(t *testing.T) {
+	texts := []string{
+		"banana",
+		"mississippi",
+		"abracadabra",
+		"the quick brown fox jumps over the lazy dog",
+		"aaaaabbbbbccccc",
+		"aaaaaaaaaa",
+		"",
+	}
+	patterns := []string{"a", "an", "the", "ab", "ccc", "xyz", "aa"}
+
+	for _, textStr := range texts {
+		text := []byte(textStr)
+		idxBV := Build(text)
+		idxRRR := BuildWithOptions(text, AlgorithmDoubling, OccRRR)
+
+		for _, pat := range patterns {
+			p := []byte(pat)
+			if gotBV, gotRRR := idxBV.Count(p), idxRRR.Count(p); gotBV != gotRRR {
+				t.Errorf("text=%q pat=%q: bitvectors=%d rrr=%d", textStr, pat, gotBV, gotRRR)
+			}
+			posBV := sortedPositions(idxBV.Locate(p, 0))
+			posRRR := sortedPositions(idxRRR.Locate(p, 0))
+			if !intSliceEqual(posBV, posRRR) {
+				t.Errorf("text=%q pat=%q: bitvectors locate=%v rrr locate=%v",
+					textStr, pat, posBV, posRRR)
+			}
+		}
+	}
+}
+
+func TestRRRPersistence(t *testing.T) {
+	text := []byte("the quick brown fox jumps over the lazy dog")
+	idx := BuildWithOptions(text, AlgorithmSAIS, OccRRR)
+
+	var buf bytes.Buffer
+	if _, err := idx.WriteTo(&buf); err != nil {
+		t.Fatal("WriteTo:", err)
+	}
+	idx2, err := ReadFrom(&buf)
+	if err != nil {
+		t.Fatal("ReadFrom:", err)
+	}
+
+	patterns := []string{"the", "fox", "dog", "quick", "xyz"}
+	for _, pat := range patterns {
+		p := []byte(pat)
+		if c1, c2 := idx.Count(p), idx2.Count(p); c1 != c2 {
+			t.Errorf("after rrr persistence, Count(%q): %d vs %d", pat, c1, c2)
+		}
+		pos1 := sortedPositions(idx.Locate(p, 0))
+		pos2 := sortedPositions(idx2.Locate(p, 0))
+		if !intSliceEqual(pos1, pos2) {
+			t.Errorf("after rrr persistence, Locate(%q): %v vs %v", pat, pos1, pos2)
+		}
+	}
+}
+
 func TestNumBWTRunsAndOccType(t *testing.T) {
 	text := []byte("mississippi")
 	idxWM := BuildWithOptions(text, AlgorithmDoubling, OccWaveletMatrix)
@@ -636,6 +698,10 @@ func TestNumBWTRunsAndOccType(t *testing.T) {
 	idxRL := BuildWithOptions(text, AlgorithmDoubling, OccRLBWT)
 	if got := idxRL.OccType(); got != OccRLBWT {
 		t.Errorf("OccType = %v, want OccRLBWT", got)
+	}
+	idxRRR := BuildWithOptions(text, AlgorithmDoubling, OccRRR)
+	if got := idxRRR.OccType(); got != OccRRR {
+		t.Errorf("OccType = %v, want OccRRR", got)
 	}
 	// NumBWTRuns: alternating text should have more runs than repetitive.
 	idxAlt := BuildWithOptions([]byte("ababababab"), AlgorithmDoubling, OccRLBWT)

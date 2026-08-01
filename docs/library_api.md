@@ -43,7 +43,7 @@
 - `ViolationError`（星なし制約違反）
 - `UnsupportedError`（未対応正規表現構文）
 - `SuffixArrayAlgorithm`: `AlgorithmDoubling`, `AlgorithmSAIS`
-- `OccStructure`: `OccBitvectors`, `OccWaveletTree`, `OccWaveletMatrix`, `OccRLBWT`
+- `OccStructure`: `OccBitvectors`, `OccWaveletTree`, `OccWaveletMatrix`, `OccRLBWT`, `OccRRR`
 - `Interval`, `SearchResult`
 
 ## 最小例
@@ -88,5 +88,6 @@ func main() {
 ## 永続化形式
 
 `Save` / `WriteTo` は Occ 構造に応じて `FMIDX05`（bitvectors）、`FMIDX06`（Wavelet Tree）、
-`FMIDX07`（Wavelet Matrix）、`FMIDX08`（RLBWT）を使用し、構築時の suffix-array
-アルゴリズムも保存します。`FMIDX01`〜`FMIDX04` は従来どおり doubling として読み込まれます。
+`FMIDX07`（Wavelet Matrix）、`FMIDX08`（RLBWT）、`FMIDX09`（RRR）を出力し、
+構築時の suffix-array アルゴリズムも保存します。`FMIDX01`〜`FMIDX04` は従来どおり
+doubling として読み込まれます。

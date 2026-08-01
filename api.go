@@ -82,6 +82,10 @@ const (
 	// space-efficient for highly repetitive texts.
 	// Indexes built with this option use the FMIDX08 on-disk format.
 	OccRLBWT OccStructure = OccStructure(fmindex.OccRLBWT)
+	// OccRRR uses one Raman-Raman-Rao (RRR) bit-vector per distinct character
+	// over the BWT. Indexes built with this option use the FMIDX09 on-disk
+	// format.
+	OccRRR OccStructure = OccStructure(fmindex.OccRRR)
 )
 
 // Interval is a half-open suffix-array range [Lo, Hi).

@@ -31,6 +31,9 @@ const (
 	// Indexes built
 	// with this option use the FMIDX08 on-disk format.
 	OccRLBWT
+	// OccRRR uses one RRR bit-vector per distinct character over the BWT.
+	// Indexes built with this option use the FMIDX09 on-disk format.
+	OccRRR
 )
 
 // occStructure is the internal interface for occurrence-array implementations.
@@ -47,6 +50,8 @@ func buildOcc(bwt []byte, typ OccStructure) occStructure {
 		return &waveletMatrixOcc{mat: waveletmatrix.Build(bwt)}
 	case OccRLBWT:
 		return &rlbwtOcc{rl: rindex.Build(bwt)}
+	case OccRRR:
+		return buildRRROcc(bwt)
 	default:
 		return buildBitvecOcc(bwt)
 	}
@@ -77,6 +82,37 @@ func buildBitvecOcc(bwt []byte) *bitvecOcc {
 }
 
 func (o *bitvecOcc) rank(b byte, i int) int {
+	if o.vecs[b] == nil {
+		return 0
+	}
+	return o.vecs[b].Rank1(i)
+}
+
+// ── rrrOcc ──────────────────────────────────────────────────────────────────
+
+// rrrOcc implements occStructure using one RRR bit-vector per character.
+type rrrOcc struct {
+	vecs [256]*bitvector.RRRVector
+}
+
+func buildRRROcc(bwt []byte) *rrrOcc {
+	n := len(bwt)
+	occ := &rrrOcc{}
+	for i, b := range bwt {
+		if occ.vecs[b] == nil {
+			occ.vecs[b] = bitvector.NewRRR(n)
+		}
+		occ.vecs[b].Set(i)
+	}
+	for i := range occ.vecs {
+		if occ.vecs[i] != nil {
+			occ.vecs[i].Build()
+		}
+	}
+	return occ
+}
+
+func (o *rrrOcc) rank(b byte, i int) int {
 	if o.vecs[b] == nil {
 		return 0
 	}
