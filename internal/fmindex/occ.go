@@ -42,6 +42,10 @@ const (
 	// character over the BWT. Indexes built with this option use the FMIDX11
 	// on-disk format.
 	OccPoppy
+	// OccDynamicBitvectors uses one dynamic bit-vector per distinct character
+	// over the BWT. Indexes built with this option use the FMIDX12 on-disk
+	// format.
+	OccDynamicBitvectors
 )
 
 // occStructure is the internal interface for occurrence-array implementations.
@@ -64,6 +68,8 @@ func buildOcc(bwt []byte, typ OccStructure) occStructure {
 		return buildEliasFanoOcc(bwt)
 	case OccPoppy:
 		return buildPoppyOcc(bwt)
+	case OccDynamicBitvectors:
+		return buildDynamicBitvecOcc(bwt)
 	default:
 		return buildBitvecOcc(bwt)
 	}
@@ -94,6 +100,38 @@ func buildBitvecOcc(bwt []byte) *bitvecOcc {
 }
 
 func (o *bitvecOcc) rank(b byte, i int) int {
+	if o.vecs[b] == nil {
+		return 0
+	}
+	return o.vecs[b].Rank1(i)
+}
+
+// ── dynamicBitvecOcc ────────────────────────────────────────────────────────
+
+// dynamicBitvecOcc implements occStructure using one dynamic bit-vector per
+// character.
+type dynamicBitvecOcc struct {
+	vecs [256]*bitvector.DynamicBitVector
+}
+
+func buildDynamicBitvecOcc(bwt []byte) *dynamicBitvecOcc {
+	n := len(bwt)
+	occ := &dynamicBitvecOcc{}
+	for i, b := range bwt {
+		if occ.vecs[b] == nil {
+			occ.vecs[b] = bitvector.NewDynamic(n)
+		}
+		occ.vecs[b].Set(i)
+	}
+	for i := range occ.vecs {
+		if occ.vecs[i] != nil {
+			occ.vecs[i].Build()
+		}
+	}
+	return occ
+}
+
+func (o *dynamicBitvecOcc) rank(b byte, i int) int {
 	if o.vecs[b] == nil {
 		return 0
 	}

@@ -170,6 +170,7 @@ func TestPersistencePreservesAlgorithmForAppend(t *testing.T) {
 		{"rrr", OccRRR},
 		{"elias-fano", OccEliasFano},
 		{"poppy", OccPoppy},
+		{"dynamic-bitvectors", OccDynamicBitvectors},
 	}
 
 	for _, tt := range tests {
@@ -813,6 +814,67 @@ func TestPoppyPersistence(t *testing.T) {
 	}
 }
 
+// --- Dynamic Bitvector tests ----------------------------------------------
+
+func TestDynamicBitvectorsMatchBitvectors(t *testing.T) {
+	texts := []string{
+		"banana",
+		"mississippi",
+		"abracadabra",
+		"the quick brown fox jumps over the lazy dog",
+		"aaaaabbbbbccccc",
+		"aaaaaaaaaa",
+		"",
+	}
+	patterns := []string{"a", "an", "the", "ab", "ccc", "xyz", "aa"}
+
+	for _, textStr := range texts {
+		text := []byte(textStr)
+		idxBV := Build(text)
+		idxDyn := BuildWithOptions(text, AlgorithmDoubling, OccDynamicBitvectors)
+
+		for _, pat := range patterns {
+			p := []byte(pat)
+			if gotBV, gotDyn := idxBV.Count(p), idxDyn.Count(p); gotBV != gotDyn {
+				t.Errorf("text=%q pat=%q: bitvectors=%d dynamic=%d", textStr, pat, gotBV, gotDyn)
+			}
+			posBV := sortedPositions(idxBV.Locate(p, 0))
+			posDyn := sortedPositions(idxDyn.Locate(p, 0))
+			if !intSliceEqual(posBV, posDyn) {
+				t.Errorf("text=%q pat=%q: bitvectors locate=%v dynamic locate=%v",
+					textStr, pat, posBV, posDyn)
+			}
+		}
+	}
+}
+
+func TestDynamicBitvectorsPersistence(t *testing.T) {
+	text := []byte("the quick brown fox jumps over the lazy dog")
+	idx := BuildWithOptions(text, AlgorithmSAIS, OccDynamicBitvectors)
+
+	var buf bytes.Buffer
+	if _, err := idx.WriteTo(&buf); err != nil {
+		t.Fatal("WriteTo:", err)
+	}
+	idx2, err := ReadFrom(&buf)
+	if err != nil {
+		t.Fatal("ReadFrom:", err)
+	}
+
+	patterns := []string{"the", "fox", "dog", "quick", "xyz"}
+	for _, pat := range patterns {
+		p := []byte(pat)
+		if c1, c2 := idx.Count(p), idx2.Count(p); c1 != c2 {
+			t.Errorf("after dynamic persistence, Count(%q): %d vs %d", pat, c1, c2)
+		}
+		pos1 := sortedPositions(idx.Locate(p, 0))
+		pos2 := sortedPositions(idx2.Locate(p, 0))
+		if !intSliceEqual(pos1, pos2) {
+			t.Errorf("after dynamic persistence, Locate(%q): %v vs %v", pat, pos1, pos2)
+		}
+	}
+}
+
 func TestNumBWTRunsAndOccType(t *testing.T) {
 	text := []byte("mississippi")
 	idxWM := BuildWithOptions(text, AlgorithmDoubling, OccWaveletMatrix)
@@ -834,6 +896,10 @@ func TestNumBWTRunsAndOccType(t *testing.T) {
 	idxPoppy := BuildWithOptions(text, AlgorithmDoubling, OccPoppy)
 	if got := idxPoppy.OccType(); got != OccPoppy {
 		t.Errorf("OccType = %v, want OccPoppy", got)
+	}
+	idxDyn := BuildWithOptions(text, AlgorithmDoubling, OccDynamicBitvectors)
+	if got := idxDyn.OccType(); got != OccDynamicBitvectors {
+		t.Errorf("OccType = %v, want OccDynamicBitvectors", got)
 	}
 	// NumBWTRuns: alternating text should have more runs than repetitive.
 	idxAlt := BuildWithOptions([]byte("ababababab"), AlgorithmDoubling, OccRLBWT)

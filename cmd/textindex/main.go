@@ -65,8 +65,8 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "textindex <command> [args]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
-	fmt.Fprintln(os.Stderr, "  build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy] <input-file> <index-file>")
-	fmt.Fprintln(os.Stderr, "  build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy] <index-file> <file1> [file2 ...]")
+	fmt.Fprintln(os.Stderr, "  build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] <input-file> <index-file>")
+	fmt.Fprintln(os.Stderr, "  build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] <index-file> <file1> [file2 ...]")
 	fmt.Fprintln(os.Stderr, "  info <index-file>")
 	fmt.Fprintln(os.Stderr, "  graph [flags] <index-file>")
 	fmt.Fprintln(os.Stderr, "  browse <index-file> [--show N] [--context N]")
@@ -84,18 +84,19 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  --occ rrr                 RRR bit-vectors (FMIDX09)")
 	fmt.Fprintln(os.Stderr, "  --occ eliasfano           Elias-Fano position lists (FMIDX10)")
 	fmt.Fprintln(os.Stderr, "  --occ poppy               Poppy / interleaved RRR bit-vectors (FMIDX11)")
+	fmt.Fprintln(os.Stderr, "  --occ dynamic             Dynamic bit-vectors (FMIDX12)")
 }
 
 func runBuild(args []string) error {
 	fs := flag.NewFlagSet("build", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	algoFlag := fs.String("algo", "sais", "suffix-array construction algorithm: doubling, sais, suffixarray, or bifmindex")
-	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, or poppy")
+	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, poppy, or dynamic")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 2 {
-		return fmt.Errorf("usage: textindex build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy] <input-file> <index-file>")
+		return fmt.Errorf("usage: textindex build [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] <input-file> <index-file>")
 	}
 
 	inputPath := fs.Arg(0)
@@ -153,12 +154,12 @@ func runBuildMulti(args []string) error {
 	fs := flag.NewFlagSet("build-multi", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	algoFlag := fs.String("algo", "sais", "suffix-array construction algorithm: doubling, sais, suffixarray, or bifmindex")
-	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, or poppy")
+	occFlag := fs.String("occ", "rlbwt", "occurrence-array structure: bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, poppy, or dynamic")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() < 2 {
-		return fmt.Errorf("usage: textindex build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy] <index-file> <file1> [file2 ...]")
+		return fmt.Errorf("usage: textindex build-multi [--algo doubling|sais|suffixarray|bifmindex] [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy|dynamic] <index-file> <file1> [file2 ...]")
 	}
 
 	indexPath := fs.Arg(0)
@@ -263,6 +264,8 @@ func occTypeName(o bwtsearch.OccStructure) string {
 		return "elias-fano"
 	case bwtsearch.OccPoppy:
 		return "poppy"
+	case bwtsearch.OccDynamicBitvectors:
+		return "dynamic-bitvectors"
 	default:
 		return "bitvectors"
 	}
@@ -582,13 +585,15 @@ func parseOcc(s string) (bwtsearch.OccStructure, error) {
 		return bwtsearch.OccEliasFano, nil
 	case "poppy", "interleaved-rrr", "interleaved_rrr":
 		return bwtsearch.OccPoppy, nil
+	case "dynamic", "dynamicbitvectors", "dynamic-bitvectors", "dbv":
+		return bwtsearch.OccDynamicBitvectors, nil
 	default:
-		return 0, fmt.Errorf("unknown occ structure %q: choose bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, or poppy", s)
+		return 0, fmt.Errorf("unknown occ structure %q: choose bitvectors, wavelet, waveletmatrix, rlbwt, rrr, eliasfano, poppy, or dynamic", s)
 	}
 }
 
 // loadAnyIndex opens path and returns the appropriate index type based on the
-// on-disk magic: FMIDX01 through FMIDX11 for FM-index variants, SAIDX01 for
+// on-disk magic: FMIDX01 through FMIDX12 for FM-index variants, SAIDX01 for
 // stdlib suffix array, BIDX001 for bidirectional FM-index.
 func loadAnyIndex(path string) (anyIndex, error) {
 	f, err := os.Open(path)

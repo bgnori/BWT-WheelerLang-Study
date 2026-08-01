@@ -94,6 +94,10 @@ const (
 	// character over the BWT. Indexes built with this option use the FMIDX11
 	// on-disk format.
 	OccPoppy OccStructure = OccStructure(fmindex.OccPoppy)
+	// OccDynamicBitvectors uses one dynamic bit-vector per distinct character
+	// over the BWT. Indexes built with this option use the FMIDX12 on-disk
+	// format.
+	OccDynamicBitvectors OccStructure = OccStructure(fmindex.OccDynamicBitvectors)
 )
 
 // Interval is a half-open suffix-array range [Lo, Hi).
