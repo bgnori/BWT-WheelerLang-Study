@@ -123,15 +123,29 @@ func reverseBytes(b []byte) []byte {
 }
 
 // TextLen returns the length of the indexed text.
-func (idx *BiIndex) TextLen() int { return idx.fwd.TextLen() }
+// A nil *BiIndex returns 0.
+func (idx *BiIndex) TextLen() int {
+	if idx == nil || idx.fwd == nil {
+		return 0
+	}
+	return idx.fwd.TextLen()
+}
 
 // ContextAround returns a snippet of text centred on pos.
+// A nil *BiIndex returns the empty string.
 func (idx *BiIndex) ContextAround(pos, patLen, ctxSize int) string {
+	if idx == nil || idx.fwd == nil {
+		return ""
+	}
 	return idx.fwd.ContextAround(pos, patLen, ctxSize)
 }
 
 // FullInterval returns the initial BiInterval covering the entire SA.
+// A nil *BiIndex returns the zero BiInterval.
 func (idx *BiIndex) FullInterval() BiInterval {
+	if idx == nil || idx.fwd == nil {
+		return BiInterval{}
+	}
 	n := idx.fwd.SALen()
 	return BiInterval{LoFwd: 0, HiFwd: n, LoRev: 0, HiRev: n}
 }
@@ -139,7 +153,11 @@ func (idx *BiIndex) FullInterval() BiInterval {
 // ExtendLeft narrows bi by prepending character c (left extension).
 // It uses the forward FM-index to update the forward interval and derives
 // the reverse interval from the count of characters < c in the BWT range.
+// A nil *BiIndex returns the zero (empty) BiInterval.
 func (idx *BiIndex) ExtendLeft(bi BiInterval, c byte) BiInterval {
+	if idx == nil || idx.fwd == nil {
+		return BiInterval{}
+	}
 	f := idx.fwd
 	newLoFwd := f.CValue(c) + f.OccCount(c, bi.LoFwd)
 	newHiFwd := f.CValue(c) + f.OccCount(c, bi.HiFwd)
@@ -157,7 +175,11 @@ func (idx *BiIndex) ExtendLeft(bi BiInterval, c byte) BiInterval {
 // ExtendRight narrows bi by appending character c (right extension).
 // It uses the reverse FM-index to update the reverse interval and derives
 // the forward interval accordingly.
+// A nil *BiIndex returns the zero (empty) BiInterval.
 func (idx *BiIndex) ExtendRight(bi BiInterval, c byte) BiInterval {
+	if idx == nil || idx.rev == nil {
+		return BiInterval{}
+	}
 	r := idx.rev
 	newLoRev := r.CValue(c) + r.OccCount(c, bi.LoRev)
 	newHiRev := r.CValue(c) + r.OccCount(c, bi.HiRev)
@@ -173,19 +195,31 @@ func (idx *BiIndex) ExtendRight(bi BiInterval, c byte) BiInterval {
 }
 
 // Count returns the number of occurrences of pattern in the indexed text.
+// A nil *BiIndex returns 0.
 func (idx *BiIndex) Count(pattern []byte) int {
+	if idx == nil || idx.fwd == nil {
+		return 0
+	}
 	return idx.fwd.Count(pattern)
 }
 
 // Locate returns up to limit text positions where pattern begins.
 // When limit <= 0 all positions are returned.
+// A nil *BiIndex returns nil.
 func (idx *BiIndex) Locate(pattern []byte, limit int) []int {
+	if idx == nil || idx.fwd == nil {
+		return nil
+	}
 	return idx.fwd.Locate(pattern, limit)
 }
 
 // WriteTo serialises the BiIndex to w in the BIDX001 format.
 // It implements io.WriterTo.
+// A nil *BiIndex returns an error.
 func (idx *BiIndex) WriteTo(w io.Writer) (int64, error) {
+	if idx == nil || idx.fwd == nil || idx.rev == nil {
+		return 0, fmt.Errorf("nil biindex")
+	}
 	var total int64
 
 	n, err := io.WriteString(w, biMagic)
@@ -254,6 +288,9 @@ func ReadBiFrom(r io.Reader) (*BiIndex, error) {
 	if err := binary.Read(br, binary.LittleEndian, &fwdLen); err != nil {
 		return nil, fmt.Errorf("biindex: read fwd length: %w", err)
 	}
+	if fwdLen < 0 {
+		return nil, fmt.Errorf("biindex: invalid fwd length %d", fwdLen)
+	}
 	fwdBytes := make([]byte, fwdLen)
 	if _, err := io.ReadFull(br, fwdBytes); err != nil {
 		return nil, fmt.Errorf("biindex: read fwd bytes: %w", err)
@@ -266,6 +303,9 @@ func ReadBiFrom(r io.Reader) (*BiIndex, error) {
 	var revLen int64
 	if err := binary.Read(br, binary.LittleEndian, &revLen); err != nil {
 		return nil, fmt.Errorf("biindex: read rev length: %w", err)
+	}
+	if revLen < 0 {
+		return nil, fmt.Errorf("biindex: invalid rev length %d", revLen)
 	}
 	revBytes := make([]byte, revLen)
 	if _, err := io.ReadFull(br, revBytes); err != nil {

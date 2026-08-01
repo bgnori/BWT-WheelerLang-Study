@@ -1,6 +1,7 @@
 # 課題一覧 — ライブラリ公開レビューで洗い出した問題点
 
 作成日: 2026-07-31  
+最終更新: 2026-07-31  
 対象: `github.com/bgnori/bwt-wheelerlang-study` の外部ライブラリ化に向けたレビュー
 
 ---
@@ -69,7 +70,7 @@ godoc にも panic 条件を明記した。`api_test.go` に 2 件のテスト�
 
 ---
 
-## #3 — `*Index` メソッド群の nil チェックが非一貫 🔴
+## #3 — `*Index` メソッド群の nil チェックが非一貫 🔴 ✅ 対応済み
 
 **ファイル:** `api.go`
 
@@ -91,9 +92,15 @@ idx.Count([]byte("abc"))  // → panic: runtime error: nil pointer dereference
 1. ゼロ値 `*Index` に対してはゼロ値を返す（`Count` → 0、`Locate` → nil、`BWT` → nil など）
 2. panic を "documented behavior" として godoc に明記する
 
+**対応内容:**  
+対処案 1 を採用。`Count`・`Locate`・`TextLen`・`SALen`・`SAAt`・`AlphabetSize`・`NumBWTRuns`・
+`OccType`・`BWT`・`ContextAround`・`WheelerGraphMermaid` に nil チェックを追加し、
+nil レシーバーに対してゼロ値（0 / nil / 空文字列）を返すよう統一した。各メソッドの godoc にも明記。
+`TestNilIndexZeroValues` で全メソッドの動作を検証済み。
+
 ---
 
-## #4 — Unicode 文字クラスがエラーなく 0 件になる 🟡
+## #4 — Unicode 文字クラスがエラーなく 0 件になる 🟡 ✅ 対応済み
 
 **ファイル:** `internal/starfree/starfree.go`
 
@@ -112,13 +119,19 @@ res, err := bwtsearch.Search(idx, "[あ-を]", 0)
 - Unicode 範囲（rune > 127）を含む文字クラスに対して `UnsupportedError` を返す
 - または `docs/library_api.md` に「文字クラスは ASCII (U+0000–U+007F) のみ対応」と明記する
 
-**現在の状態（部分対応）:**  
-`docs/library_api.md` の「Star-free regex search」節に ASCII 限定の制限事項を記載済み。
-`UnsupportedError` を返す対応は未実施。
+**現在の状態（未対応）:**  
+再レビュー（2026-07-31）で確認したところ、`docs/library_api.md` に ASCII 限定の制限事項の記載は
+存在しない（以前の「部分対応」記載は誤り）。`UnsupportedError` を返す対応も未実施のため、
+ドキュメント追記またはエラー返却のいずれかの対応が必要。
+
+**対応内容:**  
+`docs/library_api.md` の「検索仕様（重要）」に、文字クラスは ASCII (U+0000–U+007F) のみ対応であり、
+非 ASCII を含む文字クラスはエラーなしに 0 件を返す旨と、非 ASCII 文字はリテラルとしてのみ検索
+できる旨を明記した。
 
 ---
 
-## #5 — `Search` が正規表現を 2 回パースしている 🟡 ✅ 対応済み
+## #5 — `Search` が正規表現を 2 回パースしていた 🟡 ✅ 対応済み
 
 **ファイル:** `internal/starfree/starfree.go`
 
@@ -143,7 +156,7 @@ func Search(idx *fmindex.Index, pattern string, limit int) (*SearchResult, error
 
 ---
 
-## #6 — `Build(nil)` の動作が未テスト・未文書化 🟡
+## #6 — `Build(nil)` の動作が未テスト・未文書化 🟡 ✅ 対応済み
 
 **ファイル:** `api.go`, `api_test.go`
 
@@ -155,9 +168,13 @@ func Search(idx *fmindex.Index, pattern string, limit int) (*SearchResult, error
 1. `Build` の godoc に「nil または空のスライスを渡すと番兵のみのインデックスを返す」と追記する
 2. `Build(nil)` と `Build([]byte{})` の動作を検証するテストを追加する
 
+**対応内容:**  
+`Build` の godoc に nil / 空スライスの動作（番兵のみのインデックス、`TextLen` = 0、`SALen` = 1）を明記し、
+`TestBuildNilAndEmpty` で `Build(nil)` と `Build([]byte{})` の `TextLen`・`SALen`・`Count`・`Search` を検証済み。
+
 ---
 
-## #7 — CI/CD ワークフローが存在しない 🔴
+## #7 — CI/CD ワークフローが存在しない 🔴 ✅ 対応済み
 
 **問題:**  
 `.github/workflows/` ディレクトリがなく、プッシュや PR ごとにテストが自動実行されない。  
@@ -180,6 +197,10 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
 ```
+
+**対応内容:**  
+`.github/workflows/ci.yml` を追加。push / pull_request ごとに `go vet ./...` と
+`go test -race ./...` を実行する（Go バージョンは `go.mod` から取得）。
 
 ---
 
@@ -239,17 +260,227 @@ git push origin v0.1.0
 
 ---
 
+## #11 — `BuildStdlibFromFiles` のセパレータに `0x00` を渡してもエラーにならない 🔴 ✅ 対応済み
+
+**ファイル:** `stdlib_index.go`
+
+**問題:**  
+`BuildFromFiles`・`BuildBiFromFiles` には 0x00 バイトの検証ループが追加されているが、
+`BuildStdlibFromFiles` には同様のチェックが存在しない。
+
+```go
+// BuildStdlibFromFiles — セパレータに 0x00 を渡してもそのままテキストに連結される
+BuildStdlibFromFiles(texts, []byte{0})  // ← panic しない / エラーにならない
+```
+
+StdlibIndex は Go 標準ライブラリの `suffixarray.Index` を使用するため FM-index の番兵問題は
+直接は発生しないが、0x00 バイトが混入したテキストで構築されたインデックスは
+検索結果が予測困難になり、ドキュメントとの一貫性が損なわれる。
+
+**対処案:**  
+`BuildFromFiles` と同様に 0x00 チェックを追加し、含まれる場合は panic する。
+
+```go
+for _, b := range separator {
+    if b == 0x00 {
+        panic("bwtsearch: separator must not contain 0x00")
+    }
+}
+```
+
+または、StdlibIndex はバイト 0x00 を特別扱いしない旨を godoc に明記する。
+
+**対応内容:**  
+`BuildStdlibFromFiles` に `BuildFromFiles` と同一の 0x00 検証ループを追加し、godoc に panic 条件を明記。
+`TestBuildStdlibFromFilesPanicsOnNullSeparator` で検証済み。
+
+---
+
+## #12 — `BiIndex` / `StdlibIndex` のメソッドに nil レシーバーチェックがない 🔴 ✅ 対応済み
+
+**ファイル:** `biindex.go`, `stdlib_index.go`
+
+**問題:**  
+`Index` の `Search`・`Append`・`WriteTo` には nil チェックが追加されているが（Issue #3 の部分対応）、
+`BiIndex` と `StdlibIndex` の全メソッドには nil レシーバーチェックが存在しない。
+
+```go
+var idx *bwtsearch.BiIndex
+idx.Count([]byte("abc"))         // → panic: nil pointer dereference
+idx.WriteTo(os.Stdout)           // → panic: nil pointer dereference
+
+var sidx *bwtsearch.StdlibIndex
+sidx.Count([]byte("abc"))        // → panic: nil pointer dereference
+```
+
+Issue #3 と同根の問題だが、`BiIndex`・`StdlibIndex` は別ファイルで管理されているため
+別 Issue として追跡する。
+
+**対処案:**  
+Issue #3 と同様に、以下のいずれかで統一する：
+1. ゼロ値レシーバーに対してゼロ値を返す（`Count` → 0、`Locate` → nil など）
+2. panic を "documented behavior" として godoc に明記する
+3. `WriteTo` / `Save` には少なくともエラーを返す（破壊的変更なし）
+
+**対応内容:**  
+対処案 1 + 3 を採用。`BiIndex` の `TextLen`・`Count`・`Locate`・`ContextAround`・`FullInterval`・
+`ExtendLeft`・`ExtendRight` と `StdlibIndex` の `TextLen`・`Count`・`Locate`・`ContextAround` は
+nil レシーバーに対してゼロ値を返し、両者の `WriteTo`（および経由する `Save`）はエラーを返す。
+`TestNilBiIndexZeroValues`・`TestNilStdlibIndexZeroValues` で検証済み。
+
+---
+
+## #13 — デシリアライズ時の長さフィールド検証が不十分 🔴 ⚠️ 部分対応
+
+**ファイル:** `internal/fmindex/fmindex.go`, `biindex.go`, `stdlib_index.go`
+
+**問題:**  
+`ReadFrom`（`readCommonHeader`）、`ReadBiFrom`、`ReadStdlibFrom` は、ストリームから読み取った
+長さフィールド（`n64`・`tlen`・`fwdLen`・`revLen` など）を検証せずに `make([]byte, n)` に渡している。
+
+```go
+// readCommonHeader — 検証なし
+var tlen int64
+binary.Read(br, binary.LittleEndian, &tlen)
+idx.text = make([]byte, tlen)   // tlen < 0 → panic / 巨大値 → OOM
+```
+
+- 負の値が読み込まれた場合、`make` が `panic: makeslice: len out of range` で即座にクラッシュする
+- 攻撃的に巨大な値（例: `1<<62`）を含む破損ファイルを `Load` すると、メモリを大量に確保しようとして OOM になり得る
+
+信頼できないファイルを `Load` / `LoadBi` / `LoadStdlib` で読み込むユースケース（CLI でユーザー指定の
+インデックスファイルを開くなど）では DoS ベクタになる。
+
+**対処案:**  
+各長さフィールド読み込み直後に検証を追加する：
+1. 負の値なら即座にエラーを返す
+2. 妥当な上限（残りストリームサイズが不明なため、たとえば `io.LimitReader` の併用や段階的読み込み）を検討する
+3. 少なくとも `tlen < 0 || n64 < 0` チェックとエラー返却を全デシリアライザに追加する
+
+**対応内容:**  
+- `internal/fmindex` の `readCommonHeader`: `n64` が `1 <= n64 <= MaxInt/4`（SA バッファ `n*4` の
+  オーバーフロー防止）であること、および `tlen == n64 - 1`（番兵の不変条件）であることを検証。
+- `ReadBiFrom`: `fwdLen` / `revLen` が負の場合はエラーを返す。
+- `ReadStdlibFrom`: `tlen` が負の場合はエラーを返す。
+
+`TestReadFromRejectsCorruptLengths`・`TestReadBiFromRejectsNegativeLength`・
+`TestReadStdlibFromRejectsNegativeLength` で検証済み。
+
+**残課題:**
+再レビュー（2026-07-31）では、負値と整数オーバーフローは拒否できる一方、入力ストリームの
+残りサイズに対して長さが妥当かは検証されていないことを確認した。64 bit 環境の `MaxInt/4` は
+実用上の上限として大きすぎ、`ReadBiFrom` と `ReadStdlibFrom` には正値の上限自体がない。
+そのため、小さな破損ストリームに巨大な正の長さを記録すると、`io.ReadFull` より前の `make` で
+過大なメモリ確保を試みる可能性が残る。読み込みバイト数の上限、既知サイズとの照合、または
+段階的な制限付き読み込みが必要。
+
+---
+
+## #14 — `BiIndex.ExtendLeft` / `ExtendRight` が 1 ステップあたり最大 255 回の rank 呼び出しを行う 🟢
+
+**ファイル:** `biindex.go`
+
+**問題:**
+`ExtendLeft` / `ExtendRight` は「c より小さい文字の出現数」を求めるために
+`for b := 0; b < int(c); b++` で全文字を走査し、1 文字あたり 2 回の `OccCount` を呼んでいる。
+
+```go
+countLess := 0
+for b := 0; b < int(c); b++ {
+    countLess += f.OccCount(byte(b), bi.HiFwd) - f.OccCount(byte(b), bi.LoFwd)
+}
+```
+
+1 回の拡張につき最大 510 回の rank クエリが発生するため、長いパターンの双方向検索や
+seed-and-extend 系の近似検索では大きなオーバーヘッドになる。
+
+**対処案（将来的な検討）:**  
+- Wavelet Tree / Wavelet Matrix の `rangeCount`（区間内で c 未満の文字数を O(log σ) で数える操作）を
+  内部 API として公開し、それを利用する
+- 実際にインデックスに現れる文字のみ走査する（`AlphabetSize` ベースの文字リストを保持する）
+
+---
+
+## #15 — FM-index の入力本文に `0x00` が含まれても拒否されない 🔴
+
+**ファイル:** `internal/fmindex/fmindex.go`, `api.go`, `biindex.go`
+
+**問題:**
+内部実装の godoc は `0x00` を一意な番兵として予約し、入力本文に含めてはならないとしているが、
+`Build`・`BuildWithAlgorithm`・`BuildWithOptions`・`BuildBi*` は本文を検証していない。
+`BuildFromFiles*` もセパレータだけを検証し、各本文内の `0x00` はそのまま連結する。
+`Append` も追加文字列を検証しない。
+
+本文に `0x00` があると番兵が一意でなくなり、suffix array 構築の前提が崩れて検索結果の正確性を
+保証できない。CLI の `build` / `build-multi` からバイナリファイルを入力した場合にも発生し得る。
+
+**対処案:**
+- FM-index の全構築経路と `Append` で本文中の `0x00` を検出し、一貫した方法で拒否する
+- 現行の構築 API は `error` を返さないため、当面は documented panic とし、将来の破壊的変更で
+  エラーを返す API を検討する
+- 単一入力、複数入力、双方向インデックス、Append の回帰テストを追加する
+
+---
+
+## #16 — 保存・復元後の `Append` で suffix-array アルゴリズムが保持されない ✅
+
+**ファイル:** `internal/fmindex/fmindex.go`
+
+**問題:**
+`Append` は「構築時の suffix-array アルゴリズムを保持する」と説明されているが、永続化形式には
+`algo` が保存されない。`readFromV1` と `readFromRebuildOcc` は読み込み時に常に
+`AlgorithmDoubling` を設定するため、`AlgorithmSAIS` で構築したインデックスを保存・復元してから
+`Append` すると、再構築処理が doubling に切り替わる。
+
+検索結果の正確性には通常影響しないが、性能特性が API の説明と異なり、大規模データでは追加処理の
+実行時間が大きく変わり得る。
+
+**対処案:**
+- 次の永続化フォーマットにアルゴリズム識別子を追加する
+- 旧フォーマットは doubling として読み込む後方互換方針を明記する
+- SA-IS で構築したインデックスの保存・復元・Append を検証するテストを追加する
+
+**対応:** `FMIDX05`〜`FMIDX08` に構築アルゴリズムを保存し、読み込み後も `Append` が同じ
+アルゴリズムを使用するようにした。旧 `FMIDX01`〜`FMIDX04` は doubling として読み込む。
+
+---
+
+## #17 — stdlib / BiIndex の検索結果が件数ちょうどでも truncated 扱いになる 🟡
+
+**ファイル:** `cmd/bwtsearch/main.go`
+
+**問題:**
+`searchAny` は `StdlibIndex` と `BiIndex` について
+`limit > 0 && len(pos) == limit` を truncated 判定に使う。この条件では、総件数が limit と
+完全に一致して追加結果が存在しない場合にも `true` となり、CLI / TUI / Web UI に
+「結果を切り詰めた」という誤った表示が出る。
+
+FM-index の正規表現検索は `TotalCount > limit` で判定しており、バックエンド間で意味が一致しない。
+
+**対処案:**
+`Count(pattern) > limit` で判定するか、`limit+1` 件を取得して追加結果の有無を確認する。
+総件数が `limit-1`、`limit`、`limit+1` のケースを各バックエンドでテストする。
+
+---
+
 ## 対応状況まとめ
 
 | # | タイトル | 優先度 | 状態 |
 |---|----------|--------|------|
 | 1 | 位置アンカーがサイレントに無視される | 🔴 High | ✅ 対応済み |
 | 2 | `BuildFromFiles` のセパレータ検証なし | 🔴 High | ✅ 対応済み |
-| 3 | `*Index` メソッドの nil チェック非一貫 | 🔴 High | 🔸 `Search`/`Append`/`WriteTo` は対応済み、`Count`/`Locate` 等は未対応 |
-| 4 | Unicode 文字クラスがエラーなく 0 件になる | 🟡 Medium | 🔸 ドキュメントに制限事項を記載済み（`UnsupportedError` 未対応） |
-| 5 | `Search` が正規表現を 2 回パース | 🟡 Medium | 未対応 |
-| 6 | `Build(nil)` が未テスト・未文書化 | 🟡 Medium | 未対応 |
-| 7 | CI/CD ワークフローがない | 🔴 High | 未対応 |
+| 3 | `*Index` メソッドの nil チェック非一貫 | 🔴 High | ✅ 対応済み |
+| 4 | Unicode 文字クラスがエラーなく 0 件になる | 🟡 Medium | ✅ 対応済み（ドキュメント明記） |
+| 5 | `Search` が正規表現を 2 回パース | 🟡 Medium | ✅ 対応済み |
+| 6 | `Build(nil)` が未テスト・未文書化 | 🟡 Medium | ✅ 対応済み |
+| 7 | CI/CD ワークフローがない | 🔴 High | ✅ 対応済み |
 | 8 | セマンティックバージョンタグがない | 🔴 High | 未対応 |
 | 9 | TUI 依存が利用者の `go.mod` に現れる | 🟢 Low | 未対応 |
 | 10 | モジュールパスに "study" が含まれる | 🟢 Low | 未対応 |
+| 11 | `BuildStdlibFromFiles` の 0x00 セパレータ検証なし | 🔴 High | ✅ 対応済み |
+| 12 | `BiIndex`/`StdlibIndex` のメソッドに nil レシーバーチェックなし | 🔴 High | ✅ 対応済み |
+| 13 | デシリアライズ時の長さフィールド検証が不十分 | 🔴 High | ⚠️ 部分対応 |
+| 14 | `BiIndex` 拡張が 1 ステップあたり O(σ) 回の rank 呼び出し | 🟢 Low | 未対応 |
+| 15 | FM-index の入力本文に `0x00` が含まれても拒否されない | 🔴 High | 未対応 |
+| 16 | 保存・復元後の `Append` で構築アルゴリズムが保持されない | 🟡 Medium | ✅ 対応済み |
+| 17 | stdlib / BiIndex の検索結果が件数ちょうどでも truncated 扱いになる | 🟡 Medium | 未対応 |

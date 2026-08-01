@@ -431,6 +431,10 @@ const magic = "FMIDX01"   // bitvector-based occ
 const magicV2 = "FMIDX02" // wavelet-tree-based occ (occ rebuilt from BWT on load)
 const magicV3 = "FMIDX03" // wavelet-matrix-based occ (occ rebuilt from BWT on load)
 const magicV4 = "FMIDX04" // RLBWT-based occ (occ rebuilt from BWT on load)
+const magicV5 = "FMIDX05" // bitvector-based occ with construction algorithm
+const magicV6 = "FMIDX06" // wavelet-tree-based occ with construction algorithm
+const magicV7 = "FMIDX07" // wavelet-matrix-based occ with construction algorithm
+const magicV8 = "FMIDX08" // RLBWT-based occ with construction algorithm
 
 // countingWriter wraps an io.Writer and tracks the total bytes written.
 type countingWriter struct {
@@ -445,30 +449,33 @@ func (cw *countingWriter) Write(p []byte) (int, error) {
 }
 
 // WriteTo serialises the index to w.
-// Bitvector-based indexes use the FMIDX01 format (backward compatible).
-// Wavelet-tree-based indexes use the FMIDX02 format.
-// Wavelet-matrix-based indexes use the FMIDX03 format.
-// RLBWT-based indexes use the FMIDX04 format.
+// Bitvector-based indexes use the FMIDX05 format.
+// Wavelet-tree-based indexes use the FMIDX06 format.
+// Wavelet-matrix-based indexes use the FMIDX07 format.
+// RLBWT-based indexes use the FMIDX08 format.
 // It implements io.WriterTo.
 func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 	switch idx.occ.(type) {
 	case *waveletOcc:
-		return idx.writeToRebuildOcc(w, magicV2)
+		return idx.writeToRebuildOcc(w, magicV6)
 	case *waveletMatrixOcc:
-		return idx.writeToRebuildOcc(w, magicV3)
+		return idx.writeToRebuildOcc(w, magicV7)
 	case *rlbwtOcc:
-		return idx.writeToRebuildOcc(w, magicV4)
+		return idx.writeToRebuildOcc(w, magicV8)
 	default:
-		return idx.writeToV1(w)
+		return idx.writeToBitvectors(w)
 	}
 }
 
-// writeToV1 writes the FMIDX01 (bitvector) format.
-func (idx *Index) writeToV1(w io.Writer) (int64, error) {
+// writeToBitvectors writes the FMIDX05 (bitvector) format.
+func (idx *Index) writeToBitvectors(w io.Writer) (int64, error) {
 	cw := &countingWriter{w: w}
 	bw := bufio.NewWriterSize(cw, 1<<20)
 
-	if _, err := bw.WriteString(magic); err != nil {
+	if _, err := bw.WriteString(magicV5); err != nil {
+		return 0, err
+	}
+	if err := writeAlgorithm(bw, idx.algo); err != nil {
 		return 0, err
 	}
 	if err := binary.Write(bw, binary.LittleEndian, int64(idx.n)); err != nil {
@@ -531,12 +538,15 @@ func (idx *Index) writeToV1(w io.Writer) (int64, error) {
 
 // writeToRebuildOcc writes a format where the occurrence array is NOT stored
 // on disk and is instead reconstructed from the BWT on load.  This is used by
-// FMIDX02 (wavelet tree), FMIDX03 (wavelet matrix), and FMIDX04 (RLBWT).
+// FMIDX06 (wavelet tree), FMIDX07 (wavelet matrix), and FMIDX08 (RLBWT).
 func (idx *Index) writeToRebuildOcc(w io.Writer, hdrMagic string) (int64, error) {
 	cw := &countingWriter{w: w}
 	bw := bufio.NewWriterSize(cw, 1<<20)
 
 	if _, err := bw.WriteString(hdrMagic); err != nil {
+		return 0, err
+	}
+	if err := writeAlgorithm(bw, idx.algo); err != nil {
 		return 0, err
 	}
 	if err := binary.Write(bw, binary.LittleEndian, int64(idx.n)); err != nil {
@@ -582,9 +592,19 @@ func (idx *Index) writeToRebuildOcc(w io.Writer, hdrMagic string) (int64, error)
 	return cw.n, nil
 }
 
+func writeAlgorithm(w *bufio.Writer, algo SuffixArrayAlgorithm) error {
+	switch algo {
+	case AlgorithmDoubling, AlgorithmSAIS:
+		return w.WriteByte(byte(algo))
+	default:
+		return fmt.Errorf("fmindex: invalid suffix-array algorithm %d", algo)
+	}
+}
+
 // ReadFrom deserialises an index from r.
 // FMIDX01 (bitvectors), FMIDX02 (wavelet tree), FMIDX03 (wavelet matrix),
-// and FMIDX04 (RLBWT) formats are all supported.
+// and FMIDX04 (RLBWT) legacy formats are supported as doubling indexes.
+// FMIDX05 through FMIDX08 additionally retain the construction algorithm.
 func ReadFrom(r io.Reader) (*Index, error) {
 	br := bufio.NewReaderSize(r, 1<<20)
 
@@ -594,16 +614,44 @@ func ReadFrom(r io.Reader) (*Index, error) {
 	}
 	switch string(hdr) {
 	case magic:
-		return readFromV1(br)
+		return readFromBitvectors(br, AlgorithmDoubling)
 	case magicV2:
-		return readFromRebuildOcc(br, OccWaveletTree)
+		return readFromRebuildOcc(br, AlgorithmDoubling, OccWaveletTree)
 	case magicV3:
-		return readFromRebuildOcc(br, OccWaveletMatrix)
+		return readFromRebuildOcc(br, AlgorithmDoubling, OccWaveletMatrix)
 	case magicV4:
-		return readFromRebuildOcc(br, OccRLBWT)
+		return readFromRebuildOcc(br, AlgorithmDoubling, OccRLBWT)
+	case magicV5, magicV6, magicV7, magicV8:
+		algo, err := readAlgorithm(br)
+		if err != nil {
+			return nil, err
+		}
+		switch string(hdr) {
+		case magicV5:
+			return readFromBitvectors(br, algo)
+		case magicV6:
+			return readFromRebuildOcc(br, algo, OccWaveletTree)
+		case magicV7:
+			return readFromRebuildOcc(br, algo, OccWaveletMatrix)
+		default:
+			return readFromRebuildOcc(br, algo, OccRLBWT)
+		}
 	default:
-		return nil, fmt.Errorf("fmindex: bad magic %q (want %q, %q, %q, or %q)",
-			hdr, magic, magicV2, magicV3, magicV4)
+		return nil, fmt.Errorf("fmindex: bad magic %q", hdr)
+	}
+}
+
+func readAlgorithm(r *bufio.Reader) (SuffixArrayAlgorithm, error) {
+	value, err := r.ReadByte()
+	if err != nil {
+		return 0, fmt.Errorf("fmindex: read suffix-array algorithm: %w", err)
+	}
+	algo := SuffixArrayAlgorithm(value)
+	switch algo {
+	case AlgorithmDoubling, AlgorithmSAIS:
+		return algo, nil
+	default:
+		return 0, fmt.Errorf("fmindex: invalid suffix-array algorithm %d", value)
 	}
 }
 
@@ -635,11 +683,18 @@ func readCommonHeader(br *bufio.Reader) (*Index, error) {
 	if err := binary.Read(br, binary.LittleEndian, &n64); err != nil {
 		return nil, fmt.Errorf("fmindex: read n: %w", err)
 	}
+	// n64 must fit in int and n*4 (SA byte size) must not overflow.
+	if n64 < 1 || n64 > int64(^uint(0)>>1)/4 {
+		return nil, fmt.Errorf("fmindex: invalid n %d", n64)
+	}
 	idx.n = int(n64)
 
 	var tlen int64
 	if err := binary.Read(br, binary.LittleEndian, &tlen); err != nil {
 		return nil, fmt.Errorf("fmindex: read text len: %w", err)
+	}
+	if tlen != n64-1 {
+		return nil, fmt.Errorf("fmindex: invalid text length %d (want n-1 = %d)", tlen, n64-1)
 	}
 	idx.text = make([]byte, tlen)
 	if _, err := io.ReadFull(br, idx.text); err != nil {
@@ -671,8 +726,8 @@ func readCommonHeader(br *bufio.Reader) (*Index, error) {
 	return idx, nil
 }
 
-// readFromV1 reads the FMIDX01 (bitvector) format (magic already consumed).
-func readFromV1(br *bufio.Reader) (*Index, error) {
+// readFromBitvectors reads a bitvector format (magic and algorithm already consumed).
+func readFromBitvectors(br *bufio.Reader, algo SuffixArrayAlgorithm) (*Index, error) {
 	idx, err := readCommonHeader(br)
 	if err != nil {
 		return nil, err
@@ -693,21 +748,21 @@ func readFromV1(br *bufio.Reader) (*Index, error) {
 		}
 	}
 	idx.occ = occ
-	idx.algo = AlgorithmDoubling
+	idx.algo = algo
 	idx.typ = OccBitvectors
 	idx.rope = newRopeFromBytes(idx.text)
 	return idx, nil
 }
 
-// readFromRebuildOcc reads formats FMIDX02/03/04 (magic already consumed).
+// readFromRebuildOcc reads a format whose magic and algorithm are already consumed.
 // The occurrence array is reconstructed from the stored BWT using occType.
-func readFromRebuildOcc(br *bufio.Reader, occType OccStructure) (*Index, error) {
+func readFromRebuildOcc(br *bufio.Reader, algo SuffixArrayAlgorithm, occType OccStructure) (*Index, error) {
 	idx, err := readCommonHeader(br)
 	if err != nil {
 		return nil, err
 	}
 	idx.occ = buildOcc(idx.bwt, occType)
-	idx.algo = AlgorithmDoubling
+	idx.algo = algo
 	idx.typ = occType
 	idx.rope = newRopeFromBytes(idx.text)
 	return idx, nil
