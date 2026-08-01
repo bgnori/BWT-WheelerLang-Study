@@ -179,10 +179,10 @@ func newExternalNode(n int, cfg ExternalConfig) *externalNode {
 	}
 
 	return &externalNode{
-		n:        n,
-		words:    words,
-		super:    super,
-		store:    store,
+		n:     n,
+		words: words,
+		super: super,
+		store: store,
 	}
 }
 
