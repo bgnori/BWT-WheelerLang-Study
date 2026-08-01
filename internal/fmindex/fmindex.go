@@ -438,6 +438,7 @@ const magicV7 = "FMIDX07"  // wavelet-matrix-based occ with construction algorit
 const magicV8 = "FMIDX08"  // RLBWT-based occ with construction algorithm
 const magicV9 = "FMIDX09"  // RRR-based occ with construction algorithm
 const magicV10 = "FMIDX10" // Elias-Fano-based occ with construction algorithm
+const magicV11 = "FMIDX11" // Poppy (interleaved RRR)-based occ with construction algorithm
 
 // countingWriter wraps an io.Writer and tracks the total bytes written.
 type countingWriter struct {
@@ -458,6 +459,7 @@ func (cw *countingWriter) Write(p []byte) (int, error) {
 // RLBWT-based indexes use the FMIDX08 format.
 // RRR-based indexes use the FMIDX09 format.
 // Elias-Fano-based indexes use the FMIDX10 format.
+// Poppy-based indexes use the FMIDX11 format.
 // It implements io.WriterTo.
 func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 	switch idx.occ.(type) {
@@ -471,6 +473,8 @@ func (idx *Index) WriteTo(w io.Writer) (int64, error) {
 		return idx.writeToRebuildOcc(w, magicV9)
 	case *eliasFanoOcc:
 		return idx.writeToRebuildOcc(w, magicV10)
+	case *poppyOcc:
+		return idx.writeToRebuildOcc(w, magicV11)
 	default:
 		return idx.writeToBitvectors(w)
 	}
@@ -548,7 +552,7 @@ func (idx *Index) writeToBitvectors(w io.Writer) (int64, error) {
 // writeToRebuildOcc writes a format where the occurrence array is NOT stored
 // on disk and is instead reconstructed from the BWT on load.  This is used by
 // FMIDX06 (wavelet tree), FMIDX07 (wavelet matrix), FMIDX08 (RLBWT),
-// FMIDX09 (RRR), and FMIDX10 (Elias-Fano).
+// FMIDX09 (RRR), FMIDX10 (Elias-Fano), and FMIDX11 (Poppy).
 func (idx *Index) writeToRebuildOcc(w io.Writer, hdrMagic string) (int64, error) {
 	cw := &countingWriter{w: w}
 	bw := bufio.NewWriterSize(cw, 1<<20)
@@ -614,7 +618,7 @@ func writeAlgorithm(w *bufio.Writer, algo SuffixArrayAlgorithm) error {
 // ReadFrom deserialises an index from r.
 // FMIDX01 (bitvectors), FMIDX02 (wavelet tree), FMIDX03 (wavelet matrix),
 // and FMIDX04 (RLBWT) legacy formats are supported as doubling indexes.
-// FMIDX05 through FMIDX10 additionally retain the construction algorithm.
+// FMIDX05 through FMIDX11 additionally retain the construction algorithm.
 func ReadFrom(r io.Reader) (*Index, error) {
 	br := bufio.NewReaderSize(r, 1<<20)
 
@@ -631,7 +635,7 @@ func ReadFrom(r io.Reader) (*Index, error) {
 		return readFromRebuildOcc(br, AlgorithmDoubling, OccWaveletMatrix)
 	case magicV4:
 		return readFromRebuildOcc(br, AlgorithmDoubling, OccRLBWT)
-	case magicV5, magicV6, magicV7, magicV8, magicV9, magicV10:
+	case magicV5, magicV6, magicV7, magicV8, magicV9, magicV10, magicV11:
 		algo, err := readAlgorithm(br)
 		if err != nil {
 			return nil, err
@@ -647,6 +651,8 @@ func ReadFrom(r io.Reader) (*Index, error) {
 			return readFromRebuildOcc(br, algo, OccRRR)
 		case magicV10:
 			return readFromRebuildOcc(br, algo, OccEliasFano)
+		case magicV11:
+			return readFromRebuildOcc(br, algo, OccPoppy)
 		default:
 			return readFromRebuildOcc(br, algo, OccRLBWT)
 		}

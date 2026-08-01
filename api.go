@@ -90,6 +90,10 @@ const (
 	// character over the BWT. Indexes built with this option use the FMIDX10
 	// on-disk format.
 	OccEliasFano OccStructure = OccStructure(fmindex.OccEliasFano)
+	// OccPoppy uses one interleaved RRR (Poppy-style) bit-vector per distinct
+	// character over the BWT. Indexes built with this option use the FMIDX11
+	// on-disk format.
+	OccPoppy OccStructure = OccStructure(fmindex.OccPoppy)
 )
 
 // Interval is a half-open suffix-array range [Lo, Hi).

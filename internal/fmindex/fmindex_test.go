@@ -169,6 +169,7 @@ func TestPersistencePreservesAlgorithmForAppend(t *testing.T) {
 		{"rlbwt", OccRLBWT},
 		{"rrr", OccRRR},
 		{"elias-fano", OccEliasFano},
+		{"poppy", OccPoppy},
 	}
 
 	for _, tt := range tests {
@@ -751,6 +752,67 @@ func TestEliasFanoPersistence(t *testing.T) {
 	}
 }
 
+// --- Poppy tests -----------------------------------------------------------
+
+func TestPoppyMatchesBitvectors(t *testing.T) {
+	texts := []string{
+		"banana",
+		"mississippi",
+		"abracadabra",
+		"the quick brown fox jumps over the lazy dog",
+		"aaaaabbbbbccccc",
+		"aaaaaaaaaa",
+		"",
+	}
+	patterns := []string{"a", "an", "the", "ab", "ccc", "xyz", "aa"}
+
+	for _, textStr := range texts {
+		text := []byte(textStr)
+		idxBV := Build(text)
+		idxPoppy := BuildWithOptions(text, AlgorithmDoubling, OccPoppy)
+
+		for _, pat := range patterns {
+			p := []byte(pat)
+			if gotBV, gotPoppy := idxBV.Count(p), idxPoppy.Count(p); gotBV != gotPoppy {
+				t.Errorf("text=%q pat=%q: bitvectors=%d poppy=%d", textStr, pat, gotBV, gotPoppy)
+			}
+			posBV := sortedPositions(idxBV.Locate(p, 0))
+			posPoppy := sortedPositions(idxPoppy.Locate(p, 0))
+			if !intSliceEqual(posBV, posPoppy) {
+				t.Errorf("text=%q pat=%q: bitvectors locate=%v poppy locate=%v",
+					textStr, pat, posBV, posPoppy)
+			}
+		}
+	}
+}
+
+func TestPoppyPersistence(t *testing.T) {
+	text := []byte("the quick brown fox jumps over the lazy dog")
+	idx := BuildWithOptions(text, AlgorithmSAIS, OccPoppy)
+
+	var buf bytes.Buffer
+	if _, err := idx.WriteTo(&buf); err != nil {
+		t.Fatal("WriteTo:", err)
+	}
+	idx2, err := ReadFrom(&buf)
+	if err != nil {
+		t.Fatal("ReadFrom:", err)
+	}
+
+	patterns := []string{"the", "fox", "dog", "quick", "xyz"}
+	for _, pat := range patterns {
+		p := []byte(pat)
+		if c1, c2 := idx.Count(p), idx2.Count(p); c1 != c2 {
+			t.Errorf("after poppy persistence, Count(%q): %d vs %d", pat, c1, c2)
+		}
+		pos1 := sortedPositions(idx.Locate(p, 0))
+		pos2 := sortedPositions(idx2.Locate(p, 0))
+		if !intSliceEqual(pos1, pos2) {
+			t.Errorf("after poppy persistence, Locate(%q): %v vs %v", pat, pos1, pos2)
+		}
+	}
+}
+
 func TestNumBWTRunsAndOccType(t *testing.T) {
 	text := []byte("mississippi")
 	idxWM := BuildWithOptions(text, AlgorithmDoubling, OccWaveletMatrix)
@@ -768,6 +830,10 @@ func TestNumBWTRunsAndOccType(t *testing.T) {
 	idxEF := BuildWithOptions(text, AlgorithmDoubling, OccEliasFano)
 	if got := idxEF.OccType(); got != OccEliasFano {
 		t.Errorf("OccType = %v, want OccEliasFano", got)
+	}
+	idxPoppy := BuildWithOptions(text, AlgorithmDoubling, OccPoppy)
+	if got := idxPoppy.OccType(); got != OccPoppy {
+		t.Errorf("OccType = %v, want OccPoppy", got)
 	}
 	// NumBWTRuns: alternating text should have more runs than repetitive.
 	idxAlt := BuildWithOptions([]byte("ababababab"), AlgorithmDoubling, OccRLBWT)

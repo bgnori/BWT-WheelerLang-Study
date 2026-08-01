@@ -46,17 +46,19 @@ FM-index 系 (`doubling` / `sais` / `bifmindex`) では Occ 構造を選択で�
 - `--occ waveletmatrix`
 - `--occ rlbwt`（既定）
 - `--occ rrr`
+- `--occ eliasfano`
+- `--occ poppy`（Interleaved RRR）
 
 ## よく使うコマンド
 
 ```bash
 # インデックス作成
 textindex build [--algo doubling|sais|suffixarray|bifmindex] \
-  [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr] <input-file> <index-file>
+  [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy] <input-file> <index-file>
 
 # 複数ファイルまとめて作成
 textindex build-multi [--algo doubling|sais|suffixarray|bifmindex] \
-  [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr] <index-file> <file1> [file2 ...]
+  [--occ bitvectors|wavelet|waveletmatrix|rlbwt|rrr|eliasfano|poppy] <index-file> <file1> [file2 ...]
 
 # 検索
 textindex search [--limit N] [--context N] [--positions] <index-file> <pattern>

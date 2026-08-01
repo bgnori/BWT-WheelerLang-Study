@@ -38,6 +38,10 @@ const (
 	// character over the BWT. Indexes built with this option use the FMIDX10
 	// on-disk format.
 	OccEliasFano
+	// OccPoppy uses one interleaved RRR (Poppy-style) bit-vector per distinct
+	// character over the BWT. Indexes built with this option use the FMIDX11
+	// on-disk format.
+	OccPoppy
 )
 
 // occStructure is the internal interface for occurrence-array implementations.
@@ -58,6 +62,8 @@ func buildOcc(bwt []byte, typ OccStructure) occStructure {
 		return buildRRROcc(bwt)
 	case OccEliasFano:
 		return buildEliasFanoOcc(bwt)
+	case OccPoppy:
+		return buildPoppyOcc(bwt)
 	default:
 		return buildBitvecOcc(bwt)
 	}
@@ -119,6 +125,38 @@ func buildRRROcc(bwt []byte) *rrrOcc {
 }
 
 func (o *rrrOcc) rank(b byte, i int) int {
+	if o.vecs[b] == nil {
+		return 0
+	}
+	return o.vecs[b].Rank1(i)
+}
+
+// ── poppyOcc ────────────────────────────────────────────────────────────────
+
+// poppyOcc implements occStructure using one Poppy (interleaved RRR)
+// bit-vector per character.
+type poppyOcc struct {
+	vecs [256]*bitvector.PoppyVector
+}
+
+func buildPoppyOcc(bwt []byte) *poppyOcc {
+	n := len(bwt)
+	occ := &poppyOcc{}
+	for i, b := range bwt {
+		if occ.vecs[b] == nil {
+			occ.vecs[b] = bitvector.NewPoppy(n)
+		}
+		occ.vecs[b].Set(i)
+	}
+	for i := range occ.vecs {
+		if occ.vecs[i] != nil {
+			occ.vecs[i].Build()
+		}
+	}
+	return occ
+}
+
+func (o *poppyOcc) rank(b byte, i int) int {
 	if o.vecs[b] == nil {
 		return 0
 	}
